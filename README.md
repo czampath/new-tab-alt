@@ -156,10 +156,10 @@ Contributions welcome! Feel free to:
 - [ ] Pomodoro timer
 - [ ] More weather providers
 
-## 📞 Support
-
-Open an issue for bug reports or feature requests.
-
 ---
 
-**Made with ❤️ for a better browsing experience**
+**Made with ❤️ for a lightweight new tab experience**
+
+<div align="center">
+    <img src="https://visitor-badge.laobi.icu/badge?page_id=czampath.new-tab-alt" />
+</div>
