@@ -6,7 +6,7 @@
     <title>New Tab</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..600&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
     <style>
         * {
@@ -89,7 +89,7 @@
         }
 
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             background: linear-gradient(135deg, #30cfd0 0%, #330867 100%);
             min-height: 100vh;
             display: flex;
@@ -102,6 +102,12 @@
             -moz-osx-font-smoothing: grayscale;
             font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
             transition: color 0.6s ease;
+        }
+
+        .main-body {
+            box-shadow: 0px 0px 15px 5px rgba(0,0,0,0.18) inset;
+            /* -webkit-box-shadow: -2px -1px 9px 1px rgba(0,0,0,0.24) inset; */
+            /* -moz-box-shadow: -2px -1px 9px 1px rgba(0,0,0,0.24) inset; */
         }
 
         #gradient-overlay {
@@ -140,6 +146,9 @@
             font-size: 18px;
             opacity: 0.9;
             margin-top: 10px;
+            font-family: 'Roboto', sans-serif;
+            font-weight: 300;
+            letter-spacing: 0.3px;
         }
 
         .weather {
@@ -161,11 +170,13 @@
         }
 
         .search-box {
+            font-size: 16px;
             background: rgba(255, 255, 255, 0.95);
+            box-shadow: 0px 0px 5px 3px rgba(0, 0, 0, 0.24) inset;
             border-radius: 50px;
             padding: 0 25px;
             margin-bottom: 40px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+            /* box-shadow: 0 10px 40px rgba(0,0,0,0.15); */
             display: flex;
             align-items: center;
             transition: all 0.3s ease;
@@ -173,27 +184,33 @@
             height: 54px;
         }
 
-        .search-box:focus-within {
-            box-shadow: 0 15px 50px rgba(0,0,0,0.25);
-            transform: translateY(-2px);
+        .search-box:hover {
+            box-shadow: 0px 0px 8px 3px rgba(0, 0, 0, 0.34) inset;
+            transform: translateY(-1px);
         }
+
+        /* .search-box:focus-within {
+            box-shadow: 0px 0px 10px 4px rgba(0, 0, 0, 0.5) inset;
+            transform: translateY(-2px);
+        } */
 
         .search-box input {
             border: none;
             outline: none;
             flex: 1;
-            font-size: 15px;
-            font-weight: 450;
+            font-size: 18px;
+            font-weight: 300;
             background: transparent;
             color: #333;
-            font-family: 'Inter', sans-serif;
-            letter-spacing: -0.015em;
+            font-family: 'Roboto', sans-serif;
+            letter-spacing: 0.3px;
             height: 100%;
             padding: 15px 0;
         }
 
         .search-box input::placeholder {
             color: #999;
+            font-weight: 300;
         }
 
         .search-icon {
@@ -266,7 +283,7 @@
         .bookmark {
             background: rgba(255, 255, 255, 0.15);
             border-radius: 15px;
-            padding: 15px 12px;
+            padding: 18px 14px;
             text-align: center;
             text-decoration: none;
             color: #fff;
@@ -303,13 +320,13 @@
         }
 
         .bookmark-icon {
-            font-size: 28px;
-            margin-bottom: 8px;
+            font-size: 32px;
+            margin-bottom: 10px;
             display: block;
         }
 
         .bookmark-title {
-            font-size: 13px;
+            font-size: 13.5px;
             font-weight: 500;
             word-break: break-word;
             letter-spacing: -0.015em;
@@ -413,7 +430,7 @@
             border-radius: 10px;
             font-size: 14px;
             font-weight: 400;
-            font-family: 'Inter', sans-serif;
+            font-family: 'Roboto', sans-serif;
             letter-spacing: -0.01em;
             transition: border-color 0.3s ease;
         }
@@ -437,7 +454,7 @@
             cursor: pointer;
             font-size: 14px;
             font-weight: 500;
-            font-family: 'Inter', sans-serif;
+            font-family: 'Roboto', sans-serif;
             letter-spacing: -0.015em;
             transition: all 0.3s ease;
         }
@@ -618,9 +635,9 @@
         }
 
         .bookmark-icon img {
-            width: 28px;
-            height: 28px;
-            border-radius: 6px;
+            width: 32px;
+            height: 32px;
+            border-radius: 7px;
         }
 
         .hidden {
@@ -637,7 +654,7 @@
             cursor: pointer;
             font-size: 14px;
             font-weight: 500;
-            font-family: 'Inter', sans-serif;
+            font-family: 'Roboto', sans-serif;
             letter-spacing: -0.015em;
             transition: all 0.3s ease;
             margin-top: 10px;
@@ -721,7 +738,7 @@
             border-radius: 10px;
             font-size: 14px;
             font-weight: 500;
-            font-family: 'Inter', sans-serif;
+            font-family: 'Roboto', sans-serif;
             letter-spacing: -0.01em;
             box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
             z-index: 10000;
@@ -761,7 +778,7 @@
         }
     </style>
 </head>
-<body>
+<body class="main-body">
     <div id="toast"></div>
     <div id="gradient-overlay"></div>
     <div id="catAnimation"></div>
@@ -1189,10 +1206,20 @@
             closeModal();
         });
 
-        modal.addEventListener('click', (e) => {
+        let modalMouseDownTarget = null;
+        modal.addEventListener('mousedown', (e) => {
             if (e.target === modal) {
+                modalMouseDownTarget = e.target;
+            } else {
+                modalMouseDownTarget = null;
+            }
+        });
+
+        modal.addEventListener('mouseup', (e) => {
+            if (modalMouseDownTarget === modal && e.target === modal) {
                 closeModal();
             }
+            modalMouseDownTarget = null;
         });
 
         saveBtn.addEventListener('click', () => {
@@ -1222,6 +1249,19 @@
             }
         });
 
+        // Handle Enter key in bookmark modal inputs
+        document.getElementById('bookmarkTitle').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                saveBtn.click();
+            }
+        });
+
+        document.getElementById('bookmarkUrl').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                saveBtn.click();
+            }
+        });
+
         function clearForm() {
             document.getElementById('bookmarkTitle').value = '';
             document.getElementById('bookmarkUrl').value = '';
@@ -1248,9 +1288,37 @@
             closeGuideModal();
         });
 
-        guideModal.addEventListener('click', (e) => {
+        let guideModalMouseDownTarget = null;
+        guideModal.addEventListener('mousedown', (e) => {
             if (e.target === guideModal) {
+                guideModalMouseDownTarget = e.target;
+            } else {
+                guideModalMouseDownTarget = null;
+            }
+        });
+
+        guideModal.addEventListener('mouseup', (e) => {
+            if (guideModalMouseDownTarget === guideModal && e.target === guideModal) {
                 closeGuideModal();
+            }
+            guideModalMouseDownTarget = null;
+        });
+
+        // ESC key handler for modals and settings panel
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                // Close bookmark modal if active
+                if (modal.classList.contains('active')) {
+                    closeModal();
+                }
+                // Close guide modal if active
+                if (guideModal.classList.contains('active')) {
+                    closeGuideModal();
+                }
+                // Close settings panel if active
+                if (settingsPanel.classList.contains('active')) {
+                    settingsPanel.classList.remove('active');
+                }
             }
         });
 
