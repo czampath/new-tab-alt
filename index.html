@@ -12,6 +12,17 @@
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+        }
+
+        input, textarea {
+            user-select: text;
+            -webkit-user-select: text;
+            -moz-user-select: text;
+            -ms-user-select: text;
         }
 
         @keyframes fadeInUp {
@@ -136,13 +147,14 @@
         .search-box {
             background: rgba(255, 255, 255, 0.95);
             border-radius: 50px;
-            padding: 15px 25px;
+            padding: 0 25px;
             margin-bottom: 40px;
             box-shadow: 0 10px 40px rgba(0,0,0,0.15);
             display: flex;
             align-items: center;
             transition: all 0.3s ease;
             animation: fadeInUp 0.75s cubic-bezier(0.16, 1, 0.3, 1) 0.27s both;
+            height: 54px;
         }
 
         .search-box:focus-within {
@@ -160,6 +172,8 @@
             color: #333;
             font-family: 'Inter', sans-serif;
             letter-spacing: -0.015em;
+            height: 100%;
+            padding: 15px 0;
         }
 
         .search-box input::placeholder {
@@ -174,7 +188,7 @@
         .bookmarks-section {
             background: rgba(255, 255, 255, 0.1);
             backdrop-filter: blur(10px);
-            border-radius: 20px;
+            border-radius: 15px;
             padding: 30px;
             box-shadow: 0 10px 40px rgba(0,0,0,0.1);
             animation: fadeInUp 0.75s cubic-bezier(0.16, 1, 0.3, 1) 0.42s both;
@@ -227,7 +241,7 @@
         .bookmark {
             background: rgba(255, 255, 255, 0.15);
             border-radius: 15px;
-            padding: 20px 15px;
+            padding: 15px 12px;
             text-align: center;
             text-decoration: none;
             color: #fff;
@@ -255,8 +269,8 @@
         }
 
         .bookmark-icon {
-            font-size: 32px;
-            margin-bottom: 10px;
+            font-size: 28px;
+            margin-bottom: 8px;
             display: block;
         }
 
@@ -272,7 +286,7 @@
             position: absolute;
             top: 5px;
             right: 5px;
-            background: rgba(255, 0, 0, 0.7);
+            background: rgba(0, 0, 0, 0.4);
             border: none;
             color: #fff;
             width: 20px;
@@ -283,6 +297,12 @@
             display: none;
             align-items: center;
             justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .delete-btn:hover {
+            background: rgba(0, 0, 0, 0.6);
+            transform: scale(1.1);
         }
 
         .bookmark:hover .delete-btn {
@@ -316,7 +336,7 @@
         .modal-content {
             background: #fff;
             padding: 30px;
-            border-radius: 20px;
+            border-radius: 15px;
             width: 90%;
             max-width: 400px;
             box-shadow: 0 20px 60px rgba(0,0,0,0.3);
@@ -556,13 +576,92 @@
         }
 
         .bookmark-icon img {
-            width: 32px;
-            height: 32px;
-            border-radius: 8px;
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
         }
 
         .hidden {
             display: none !important;
+        }
+
+        .guide-btn {
+            width: 100%;
+            padding: 12px;
+            background: rgba(102, 126, 234, 0.1);
+            border: 1px solid rgba(102, 126, 234, 0.3);
+            color: #667eea;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            font-family: 'Inter', sans-serif;
+            letter-spacing: -0.015em;
+            transition: all 0.3s ease;
+            margin-top: 10px;
+        }
+
+        .guide-btn:hover {
+            background: rgba(102, 126, 234, 0.15);
+            border-color: rgba(102, 126, 234, 0.4);
+        }
+
+        .guide-modal .modal-content {
+            max-width: 500px;
+        }
+
+        .guide-content {
+            color: #333;
+        }
+
+        .guide-content h4 {
+            font-size: 18px;
+            font-weight: 600;
+            margin: 20px 0 12px 0;
+            color: #333;
+            letter-spacing: -0.02em;
+        }
+
+        .guide-content h4:first-child {
+            margin-top: 0;
+        }
+
+        .guide-content p {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .guide-content ol {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+
+        .guide-content li {
+            font-size: 14px;
+            line-height: 1.7;
+            color: #666;
+            margin-bottom: 8px;
+        }
+
+        .guide-content a {
+            color: #667eea;
+            text-decoration: none;
+            word-break: break-all;
+        }
+
+        .guide-content a:hover {
+            text-decoration: underline;
+        }
+
+        .guide-content .highlight {
+            background: rgba(102, 126, 234, 0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            color: #667eea;
         }
 
         @media (max-width: 600px) {
@@ -658,6 +757,8 @@
                 <button id="saveWeatherLocation" style="margin-top: 8px; padding: 8px 16px; background: #667eea; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; width: 100%;">Save Location</button>
             </div>
         </div>
+
+        <button class="guide-btn" id="guideBtn">📖 How to Use</button>
     </div>
 
     <div class="container">
@@ -695,6 +796,36 @@
             <div class="modal-buttons">
                 <button class="modal-btn secondary" id="cancelBtn">Cancel</button>
                 <button class="modal-btn primary" id="saveBtn">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal guide-modal" id="guideModal">
+        <div class="modal-content">
+            <h3>How to Use</h3>
+            <div class="guide-content">
+                <h4>Setup Instructions</h4>
+                <p>Replace your browser's default new tab with this lightweight, customizable page:</p>
+                <ol>
+                    <li>Install the Chrome extension: <a href="https://chromewebstore.google.com/detail/override-chromes-new-tab/blipilanfdpkfifjekjokjahpjnngifa" target="_blank">Override Chrome's New Tab</a></li>
+                    <li>After installation, set the URL to: <span class="highlight">https://czampath.github.io/new-tab-alt/</span></li>
+                    <li>Save and open a new tab to see your custom page!</li>
+                </ol>
+
+                <h4>Why Use This?</h4>
+                <p>• Bypass organization-enforced new tab pages<br>
+                • Lightweight (~30MB) and fast performance<br>
+                • Fully customizable with your own bookmarks and settings<br>
+                • No data collection or privacy concerns</p>
+
+                <h4>Features</h4>
+                <p>• Add custom bookmarks with Quick Access<br>
+                • Choose from beautiful gradient backgrounds<br>
+                • Optional weather display (requires free API key)<br>
+                • Search Google or navigate directly from the search bar</p>
+            </div>
+            <div class="modal-buttons">
+                <button class="modal-btn primary" id="guideCloseBtn">Got it!</button>
             </div>
         </div>
     </div>
@@ -978,6 +1109,33 @@
             document.getElementById('bookmarkTitle').value = '';
             document.getElementById('bookmarkUrl').value = '';
         }
+
+        // Guide modal handling
+        const guideModal = document.getElementById('guideModal');
+        const guideBtn = document.getElementById('guideBtn');
+        const guideCloseBtn = document.getElementById('guideCloseBtn');
+
+        function closeGuideModal() {
+            guideModal.classList.add('closing');
+            guideModal.classList.remove('active');
+            setTimeout(() => {
+                guideModal.classList.remove('closing');
+            }, 200);
+        }
+
+        guideBtn.addEventListener('click', () => {
+            guideModal.classList.add('active');
+        });
+
+        guideCloseBtn.addEventListener('click', () => {
+            closeGuideModal();
+        });
+
+        guideModal.addEventListener('click', (e) => {
+            if (e.target === guideModal) {
+                closeGuideModal();
+            }
+        });
 
         // Search functionality
         const searchInput = document.getElementById('searchInput');
