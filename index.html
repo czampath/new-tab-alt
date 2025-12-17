@@ -100,11 +100,26 @@
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
             font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+            transition: color 0.6s ease;
+        }
+
+        #gradient-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 0;
+            transition: opacity 1.5s ease;
         }
 
         .container {
             max-width: 900px;
             width: 100%;
+            position: relative;
+            z-index: 1;
         }
 
         .time-display {
@@ -219,7 +234,7 @@
             font-size: 24px;
             font-weight: 300;
             line-height: 1;
-            transition: all 0.3s ease;
+            transition: all 0.3s ease, background 0.6s ease, color 0.6s ease;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -229,6 +244,15 @@
         .add-btn:hover {
             background: rgba(255, 255, 255, 0.45);
             transform: translateY(-1px) scale(1.05);
+        }
+
+        body.light-theme .add-btn {
+            background: rgba(0, 0, 0, 0.15);
+            color: #333;
+        }
+
+        body.light-theme .add-btn:hover {
+            background: rgba(0, 0, 0, 0.25);
         }
 
         .bookmarks-grid {
@@ -245,7 +269,7 @@
             text-align: center;
             text-decoration: none;
             color: #fff;
-            transition: all 0.3s ease;
+            transition: all 0.3s ease, background 0.6s ease, color 0.6s ease;
             position: relative;
             cursor: pointer;
             animation: popIn 0.65s cubic-bezier(0.34, 1.56, 0.64, 1) both;
@@ -266,6 +290,15 @@
         .bookmark:hover {
             background: rgba(255, 255, 255, 0.25);
             transform: translateY(-3px);
+        }
+
+        body.light-theme .bookmark {
+            background: rgba(0, 0, 0, 0.1);
+            color: #333;
+        }
+
+        body.light-theme .bookmark:hover {
+            background: rgba(0, 0, 0, 0.15);
         }
 
         .bookmark-icon {
@@ -438,7 +471,7 @@
             border-radius: 50%;
             cursor: pointer;
             font-size: 20px;
-            transition: all 0.3s ease;
+            transition: background 0.6s ease, rotate 0.4s ease;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -448,7 +481,15 @@
 
         .settings-btn:hover {
             background: rgba(255, 255, 255, 0.3);
-            transform: rotate(90deg);
+            rotate: 67.5deg;
+        }
+
+        body.light-theme .settings-btn {
+            background: rgba(0, 0, 0, 0.15);
+        }
+
+        body.light-theme .settings-btn:hover {
+            background: rgba(0, 0, 0, 0.25);
         }
 
         .cog-icon {
@@ -662,6 +703,36 @@
             font-family: 'Courier New', monospace;
             font-size: 13px;
             color: #667eea;
+            user-select: text;
+            -webkit-user-select: text;
+            -moz-user-select: text;
+            -ms-user-select: text;
+            cursor: text;
+        }
+
+        #toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.85);
+            color: #fff;
+            padding: 14px 20px;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 500;
+            font-family: 'Inter', sans-serif;
+            letter-spacing: -0.01em;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+            z-index: 10000;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            pointer-events: none;
+        }
+
+        #toast.show {
+            opacity: 1;
+            transform: translateY(0);
         }
 
         @media (max-width: 600px) {
@@ -677,6 +748,8 @@
     </style>
 </head>
 <body>
+    <div id="toast"></div>
+    <div id="gradient-overlay"></div>
     <button class="settings-btn" id="settingsBtn"><span class="cog-icon">⚙️</span></button>
 
     <div class="settings-panel" id="settingsPanel">
@@ -831,6 +904,17 @@
     </div>
 
     <script>
+        // Toast notification function
+        function showToast(message, duration = 3000) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, duration);
+        }
+
         // Default bookmarks
         const defaultBookmarks = [
             { title: 'Gmail', url: 'https://mail.google.com' },
@@ -857,6 +941,17 @@
             try {
                 const parsed = new URL(url);
                 if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+                    // Validate that hostname exists and is not empty
+                    if (!parsed.hostname || parsed.hostname.length === 0) {
+                        return 'about:blank';
+                    }
+                    // Validate that hostname has at least one dot (e.g., google.com) or is localhost
+                    if (parsed.hostname !== 'localhost' && !parsed.hostname.includes('.')) {
+                        return 'about:blank';
+                    }
+                    return url;
+                } else if (parsed.protocol === 'file:') {
+                    // Allow local file paths
                     return url;
                 }
             } catch {
@@ -1090,11 +1185,18 @@
             const url = document.getElementById('bookmarkUrl').value.trim();
 
             if (title && url) {
-                const formattedUrl = url.startsWith('http') ? url : `https://${url}`;
+                // Format URL: if it starts with http/https/file, use as-is; otherwise add https://
+                let formattedUrl;
+                if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('file://')) {
+                    formattedUrl = url;
+                } else {
+                    formattedUrl = `https://${url}`;
+                }
+                
                 const sanitized = sanitizeUrl(formattedUrl);
                 
                 if (sanitized === 'about:blank') {
-                    alert('Please enter a valid HTTP or HTTPS URL');
+                    showToast('Please enter a valid URL (e.g., google.com, http://example.com, or file:///path/to/file)');
                     return;
                 }
                 
@@ -1170,7 +1272,25 @@
 
         // Apply saved settings
         function applySettings() {
+            const lightBackgrounds = [
+                'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+                'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+                'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
+                'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)'
+            ];
+            
             document.body.style.background = settings.background;
+            
+            // Check if current background is light and apply theme
+            const isLight = lightBackgrounds.includes(settings.background);
+            if (isLight) {
+                document.body.classList.add('light-theme');
+                document.body.style.color = '#333';
+            } else {
+                document.body.classList.remove('light-theme');
+                document.body.style.color = '#fff';
+            }
+            
             timeDisplay.style.display = settings.showTime ? 'block' : 'none';
             bookmarksSection.style.display = settings.showBookmarks ? 'block' : 'none';
             searchBox.style.display = settings.showSearch ? 'flex' : 'none';
@@ -1209,12 +1329,46 @@
         });
 
         // Color presets
+        const lightBackgrounds = [
+            'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+            'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+            'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
+            'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)'
+        ];
+        
         document.querySelectorAll('.color-preset').forEach(preset => {
             preset.addEventListener('click', () => {
                 const gradient = preset.dataset.gradient;
+                const overlay = document.getElementById('gradient-overlay');
+                                
+                // Determine text color based on background brightness
+                const isLight = lightBackgrounds.includes(gradient);
+                const textColor = isLight ? '#333' : '#fff';
+                document.body.style.color = textColor;
+                
+                // Toggle light theme class
+                if (isLight) {
+                    document.body.classList.add('light-theme');
+                } else {
+                    document.body.classList.remove('light-theme');
+                }
+                
+                // Set new gradient on overlay
+                overlay.style.background = gradient;
+                
+                // Fade in overlay
+                requestAnimationFrame(() => {
+                    overlay.style.opacity = '1';
+                });
+                
+                // After fade completes, swap background and fade out overlay
+                setTimeout(() => {
+                    document.body.style.background = gradient;
+                    overlay.style.opacity = '0';
+                }, 900);
+                
                 settings.background = gradient;
                 localStorage.setItem('settings', JSON.stringify(settings));
-                document.body.style.background = gradient;
             });
         });
 
@@ -1249,13 +1403,26 @@
             }
         });
 
-        document.getElementById('weatherApiKey').addEventListener('blur', () => {
+        let apiKeyTimeout;
+        document.getElementById('weatherApiKey').addEventListener('input', () => {
             const apiKey = document.getElementById('weatherApiKey').value.trim();
-            settings.weatherApiKey = apiKey;
-            localStorage.setItem('settings', JSON.stringify(settings));
-            if (apiKey && settings.weatherLat && settings.weatherLon) {
-                localStorage.removeItem('weatherCache');
-                loadWeather();
+            
+            clearTimeout(apiKeyTimeout);
+            
+            if (apiKey.length >= 32) {
+                settings.weatherApiKey = apiKey;
+                localStorage.setItem('settings', JSON.stringify(settings));
+                showToast('API key saved! Note: It may take a couple of minutes for the key to be activated.', 5000);
+                
+                if (settings.weatherLat && settings.weatherLon) {
+                    localStorage.removeItem('weatherCache');
+                    loadWeather();
+                }
+            } else if (apiKey.length > 0) {
+                apiKeyTimeout = setTimeout(() => {
+                    settings.weatherApiKey = apiKey;
+                    localStorage.setItem('settings', JSON.stringify(settings));
+                }, 500);
             }
         });
 
@@ -1269,9 +1436,9 @@
                 localStorage.setItem('settings', JSON.stringify(settings));
                 localStorage.removeItem('weatherCache'); // Clear cache to force refresh
                 loadWeather();
-                alert('Location saved! Weather will update.');
+                showToast('Location saved! Weather will update.');
             } else {
-                alert('Please enter both latitude and longitude.');
+                showToast('Please enter both latitude and longitude.');
             }
         });
 
