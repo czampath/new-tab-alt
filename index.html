@@ -98,6 +98,16 @@
             justify-content: center;
             padding: 20px;
             color: #fff;
+        }
+
+        #sparkCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 9999;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
             font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
@@ -891,6 +901,9 @@
     </style>
 </head>
 <body class="main-body">
+    <!-- Spark Canvas for cursor friction effect -->
+    <canvas id="sparkCanvas"></canvas>
+    
     <!-- Debug Meter (Ctrl+Shift+D to toggle) -->
     <div id="debugMeter">
         <div class="meter-title">🐱 CAT SUMMONING DEBUG (Ctrl+Shift+D)</div>
@@ -1690,8 +1703,8 @@
             // Click intensity boost (added to dangle intensity per click)
             clickIntensityBoost: 5,
             // How long cat stays visible (min-max in ms)
-            stayDurationMin: 4000,
-            stayDurationMax: 8000,
+            stayDurationMin: 6000,
+            stayDurationMax: 9000,
             // Max pixels per movement that count (prevents long sweeps from being too effective)
             maxDangleDistancePerMove: 20,
             // Radius of concentrated dangle zone (px) - fast movements within this are OK
@@ -1787,10 +1800,18 @@
             
             // Only count clicks in bottom portion of screen
             if (cursorY > viewportHeight * (1 - catDangleParams.activeZoneRatio)) {
+                const previousIntensity = dangleIntensity;
                 dangleIntensity = Math.min(
                     catDangleParams.maxDangleIntensity,
                     dangleIntensity + catDangleParams.clickIntensityBoost
                 );
+                const intensityGain = dangleIntensity - previousIntensity;
+                
+                // Create sparks only in bottom 1/5 of screen and for significant intensity increases
+                if (cursorY > viewportHeight * 0.8 && intensityGain > 3.0 && window.createDangleSparks) {
+                    window.createDangleSparks(e.clientX, cursorY, intensityGain);
+                }
+                
                 maybeRescheduleCat();
                 updateDebugMeter();
             }
@@ -1851,11 +1872,18 @@
                     }
                     
                     // Add to dangle intensity based on movement
+                    const previousIntensity = dangleIntensity;
                     const dangleUnits = distance / catDangleParams.dangleSensitivity;
                     dangleIntensity = Math.min(
                         catDangleParams.maxDangleIntensity,
                         dangleIntensity + dangleUnits
                     );
+                    const intensityGain = dangleIntensity - previousIntensity;
+                    
+                    // Create sparks only for significant intensity increases (threshold: 1.5)
+                    if (intensityGain > .18 && window.createDangleSparks) {
+                        window.createDangleSparks(cursorX, cursorY, intensityGain);
+                    }
                     
                     // Check if we should reschedule cat appearance
                     maybeRescheduleCat();
@@ -2007,6 +2035,177 @@
         setTimeout(() => {
             scheduleCatAnimation();
         },  1 * 1000);
+    </script>
+
+    <!-- Friction Spark Effect Script -->
+    <script>
+        // Performance-optimized spark particle system
+        const canvas = document.getElementById('sparkCanvas');
+        const ctx = canvas.getContext('2d', { alpha: true });
+        
+        // Set canvas size
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Particle class with realistic physics
+        class Spark {
+            constructor(x, y, vx, vy, isHaywire = false) {
+                this.x = x;
+                this.y = y;
+                this.vx = vx;
+                this.vy = vy;
+                this.life = 1.0;
+                this.decay = Math.random() * 0.003 + 0.002; // Much slower decay for longer life
+                this.size = Math.random() * 0.8 + 0.3;
+                this.gravity = 0.02; // Much slower falling
+                this.friction = 0.98;
+                this.isHaywire = isHaywire;
+                this.directionChangeCounter = 0;
+                
+                // Color variations for realistic sparks (more prominent yellowish)
+                const colorChoice = Math.random();
+                if (colorChoice < 0.3) {
+                    this.color = { r: 255, g: 220 + Math.random() * 35, b: 50 + Math.random() * 30 }; // Bright yellow-orange
+                } else if (colorChoice < 0.85) {
+                    this.color = { r: 255, g: 250 + Math.random() * 5, b: 100 + Math.random() * 50 }; // Vivid yellow
+                } else {
+                    this.color = { r: 255, g: 255, b: 200 + Math.random() * 30 }; // Bright yellow-white
+                }
+            }
+
+            update() {
+                if (this.isHaywire) {
+                    // Haywire sparks change direction randomly
+                    this.directionChangeCounter++;
+                    if (this.directionChangeCounter > 3) { // Change direction every few frames
+                        this.directionChangeCounter = 0;
+                        const randomAngle = Math.random() * Math.PI * 2;
+                        const randomForce = Math.random() * 0.5;
+                        this.vx += Math.cos(randomAngle) * randomForce;
+                        this.vy += Math.sin(randomAngle) * randomForce;
+                    }
+                    // Haywire sparks have less gravity
+                    this.vy += this.gravity * 0.3;
+                } else {
+                    // Normal sparks fall normally
+                    this.vy += this.gravity;
+                }
+                
+                this.vx *= this.friction;
+                this.vy *= this.friction;
+                
+                this.x += this.vx;
+                this.y += this.vy;
+                
+                // Fade out
+                this.life -= this.decay;
+                
+                return this.life > 0;
+            }
+
+            draw() {
+                const alpha = Math.pow(this.life, 0.5); // Smoother fade
+                
+                // Draw glow
+                ctx.save();
+                ctx.globalCompositeOperation = 'lighter';
+                
+                // Outer glow
+                const gradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.size * 4);
+                gradient.addColorStop(0, `rgba(${this.color.r}, ${this.color.g}, ${this.color.b}, ${alpha * 0.8})`);
+                gradient.addColorStop(0.4, `rgba(${this.color.r}, ${this.color.g}, ${this.color.b}, ${alpha * 0.3})`);
+                gradient.addColorStop(1, `rgba(${this.color.r}, ${this.color.g}, ${this.color.b}, 0)`);
+                
+                ctx.fillStyle = gradient;
+                ctx.fillRect(this.x - this.size * 4, this.y - this.size * 4, this.size * 8, this.size * 8);
+                
+                // Core particle
+                ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size * 0.6, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.restore();
+            }
+        }
+
+        // Particle pool
+        const particles = [];
+        const MAX_PARTICLES = 150; // Limit for performance
+        
+        // Function to create sparks at cursor position (called from dangle detection)
+        window.createDangleSparks = function(x, y, intensity) {
+            // Scale spark size based on intensity
+            // For small dangle intensities (0.18-2), use larger base
+            // For large click intensities (3+), use smaller multiplier
+            let baseSize, velocityMultiplier;
+            if (intensity < 2) {
+                // Dangle sparks - larger size range and more spread
+                baseSize = 0.5 + (intensity * 0.8); // Size range: 0.5 to ~2.1
+                velocityMultiplier = (Math.random() * 3 + 2) * (intensity * 0.8); // High spread
+            } else {
+                // Click sparks - smaller size range and moderate spread
+                baseSize = 0.4 + (Math.min(intensity / 8, 1) * 0.6); // Size range: 0.4 to 1.0
+                velocityMultiplier = (Math.random() * 2 + 1.2) * (intensity * 0.4); // Moderate spread
+            }
+            
+            const sparkCount = Math.min(Math.floor(intensity * 3) + 1, 8); // Scale with intensity
+            
+            for (let i = 0; i < sparkCount; i++) {
+                if (particles.length < MAX_PARTICLES) {
+                    // Random direction for spark spread
+                    const angle = Math.random() * Math.PI * 2;
+                    
+                    const vx = Math.cos(angle) * velocityMultiplier;
+                    const vy = Math.sin(angle) * velocityMultiplier - Math.random() * 1; // Slight upward bias
+                    
+                    // Add some randomness to spawn position
+                    const offsetX = (Math.random() - 0.5) * 10;
+                    const offsetY = (Math.random() - 0.5) * 10;
+                    
+                    // 5% chance of haywire spark
+                    const isHaywire = Math.random() < 0.15;
+                    
+                    const spark = new Spark(
+                        x + offsetX,
+                        y + offsetY,
+                        vx,
+                        vy,
+                        isHaywire
+                    );
+                    // Override size based on intensity
+                    spark.size = baseSize * (Math.random() * 0.4 + 0.8); // Add slight variation
+                    
+                    particles.push(spark);
+                }
+            }
+        };
+
+        // Animation loop with performance optimization
+        function animate(currentTime) {
+            // Clear canvas completely (transparent)
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Update and draw particles (reverse loop for safe removal)
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const particle = particles[i];
+                
+                if (!particle.update()) {
+                    particles.splice(i, 1);
+                } else {
+                    particle.draw();
+                }
+            }
+            
+            requestAnimationFrame(animate);
+        }
+
+        // Start animation
+        requestAnimationFrame(animate);
     </script>
 </body>
 </html>
