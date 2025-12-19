@@ -1972,10 +1972,20 @@
                     );
                     const intensityGain = dangleIntensity - previousIntensity;
                     
-                    // Create sparks only for significant intensity increases
+                    // Create sparks based on movement
                     // Skip if cursor is over UI elements
-                    if (intensityGain > .18 && window.createDangleSparks && !isOverUIFlag) {
-                        window.createDangleSparks(cursorX, cursorY, intensityGain, isMousePressed);
+                    if (!isOverUIFlag && window.createDangleSparks) {
+                        if (isMousePressed) {
+                            // When mouse pressed: create sparks on every movement with fixed small amount
+                            if (intensityGain > 0.01) { // Very low threshold
+                                window.createDangleSparks(cursorX, cursorY, 0.3, isMousePressed); // Fixed small intensity
+                            }
+                        } else {
+                            // Normal: create sparks for movement (lowered threshold for more sparks)
+                            if (intensityGain > 0.12) {
+                                window.createDangleSparks(cursorX, cursorY, intensityGain, isMousePressed);
+                            }
+                        }
                     }
                     
                     // Check if we should reschedule cat appearance
@@ -2282,9 +2292,9 @@
             
             let sparkCount = Math.min(Math.floor(intensity * 3) + 1, 8); // Scale with intensity
             
-            // Double spark count if mouse is pressed during dangling
+            // Multiply by 2 when mouse pressed (we control via fixed intensity now)
             if (mousePressed && intensity < 2) {
-                sparkCount = sparkCount * 1.5;
+                sparkCount = sparkCount * 2;
             }
             
             for (let i = 0; i < sparkCount; i++) {
