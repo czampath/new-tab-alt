@@ -100,18 +100,25 @@
             color: #fff;
         }
 
-        #sparkCanvas {
+        #sparkCanvas, #haywireCanvas {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
             pointer-events: none;
-            z-index: 9999;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
             font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
             transition: color 0.6s ease;
+        }
+        
+        #sparkCanvas {
+            z-index: 9999;
+        }
+        
+        #haywireCanvas {
+            z-index: 10000;
         }
 
         .main-body {
@@ -903,6 +910,8 @@
 <body class="main-body">
     <!-- Spark Canvas for cursor friction effect -->
     <canvas id="sparkCanvas"></canvas>
+    <!-- Haywire Canvas with motion blur trail -->
+    <canvas id="haywireCanvas"></canvas>
     
     <!-- Debug Meter (Ctrl+Shift+D to toggle) -->
     <div id="debugMeter">
@@ -2142,14 +2151,19 @@
 
     <!-- Friction Spark Effect Script -->
     <script>
-        // Performance-optimized spark particle system
+        // Performance-optimized spark particle system with two canvases
         const canvas = document.getElementById('sparkCanvas');
         const ctx = canvas.getContext('2d', { alpha: true });
+        
+        const haywireCanvas = document.getElementById('haywireCanvas');
+        const haywireCtx = haywireCanvas.getContext('2d', { alpha: true });
         
         // Set canvas size
         function resizeCanvas() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
+            haywireCanvas.width = window.innerWidth;
+            haywireCanvas.height = window.innerHeight;
         }
         resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
@@ -2197,8 +2211,10 @@
                 this.decay = isHaywire 
                     ? (Math.random() * 0.0015 + 0.001) 
                     : (Math.random() * 0.003 + 0.002);
-                this.size = Math.random() * 0.8 + 0.3;
-                this.gravity = 0.02; // Much slower falling
+                // Haywire sparks are much smaller and thinner
+                this.size = isHaywire ? (Math.random() * 0.25 + 0.15) : (Math.random() * 0.8 + 0.3);
+                // Gravity proportional to size - smaller sparks fall slower
+                this.gravity = this.size * 0.02;
                 this.friction = 0.98;
                 this.isHaywire = isHaywire;
                 this.directionChangeCounter = 0;
@@ -2208,7 +2224,7 @@
                 if (colorChoice < 0.3) {
                     this.color = { r: 255, g: 220 + Math.random() * 35, b: 50 + Math.random() * 30 }; // Bright yellow-orange
                 } else if (colorChoice < 0.85) {
-                    this.color = { r: 255, g: 250 + Math.random() * 5, b: 100 + Math.random() * 50 }; // Vivid yellow
+                    this.color = { r: 255, g: 200 + Math.random() * 5, b: 80 + Math.random() * 50 }; // Vivid yellow
                 } else {
                     this.color = { r: 255, g: 255, b: 200 + Math.random() * 30 }; // Bright yellow-white
                 }
@@ -2238,8 +2254,10 @@
                 this.x += this.vx;
                 this.y += this.vy;
                 
-                // Fade out
-                this.life -= this.decay;
+                // Fade out - accelerate decay when close to max particle limit
+                const particleRatio = particles.length / MAX_PARTICLES;
+                const decayMultiplier = particleRatio > 0.7 ? (1 + (particleRatio - 0.7) * 3) : 1;
+                this.life -= this.decay * decayMultiplier;
                 
                 return this.life > 0;
             }
@@ -2247,32 +2265,42 @@
             draw() {
                 const alpha = Math.pow(this.life, 0.5); // Smoother fade
                 
+                // Choose the correct context based on particle type
+                const drawCtx = this.isHaywire ? haywireCtx : ctx;
+                
+                // Haywire sparks are much lighter to prevent bold trails
+                const opacityMultiplier = this.isHaywire ? 0.4 : 1.0;
+                const glowSize = this.isHaywire ? 2 : 4; // Smaller glow for haywire
+                
                 // Draw glow
-                ctx.save();
-                ctx.globalCompositeOperation = 'lighter';
+                drawCtx.save();
+                drawCtx.globalCompositeOperation = 'lighter';
                 
                 // Outer glow
-                const gradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.size * 4);
-                gradient.addColorStop(0, `rgba(${this.color.r}, ${this.color.g}, ${this.color.b}, ${alpha * 0.8})`);
-                gradient.addColorStop(0.4, `rgba(${this.color.r}, ${this.color.g}, ${this.color.b}, ${alpha * 0.3})`);
+                const gradient = drawCtx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.size * glowSize);
+                gradient.addColorStop(0, `rgba(${this.color.r}, ${this.color.g}, ${this.color.b}, ${alpha * 0.8 * opacityMultiplier})`);
+                gradient.addColorStop(0.4, `rgba(${this.color.r}, ${this.color.g}, ${this.color.b}, ${alpha * 0.3 * opacityMultiplier})`);
                 gradient.addColorStop(1, `rgba(${this.color.r}, ${this.color.g}, ${this.color.b}, 0)`);
                 
-                ctx.fillStyle = gradient;
-                ctx.fillRect(this.x - this.size * 4, this.y - this.size * 4, this.size * 8, this.size * 8);
+                drawCtx.fillStyle = gradient;
+                drawCtx.fillRect(this.x - this.size * glowSize, this.y - this.size * glowSize, this.size * glowSize * 2, this.size * glowSize * 2);
                 
                 // Core particle
-                ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.size * 0.6, 0, Math.PI * 2);
-                ctx.fill();
+                drawCtx.fillStyle = `rgba(255, 255, 255, ${alpha * opacityMultiplier})`;
+                drawCtx.beginPath();
+                drawCtx.arc(this.x, this.y, this.size * 0.6, 0, Math.PI * 2);
+                drawCtx.fill();
                 
-                ctx.restore();
+                drawCtx.restore();
             }
         }
 
         // Particle pool
         const particles = [];
-        const MAX_PARTICLES = 500; // Limit for performance (increased for mouse-pressed mode)
+        const MAX_PARTICLES = 600; // Limit for performance (increased for mouse-pressed mode)
+        
+        // Frame counter for periodic canvas clearing
+        let frameCount = 0;
         
         // Function to create sparks at cursor position (called from dangle detection)
         window.createDangleSparks = function(x, y, intensity, mousePressed = false) {
@@ -2310,7 +2338,7 @@
                     const offsetY = (Math.random() - 0.5) * 10;
                     
                     // 5% chance of haywire spark
-                    const isHaywire = Math.random() < 0.15;
+                    const isHaywire = Math.random() < 0.05;
                     
                     const spark = new Spark(
                         x + offsetX,
@@ -2323,6 +2351,11 @@
                     // Override size based on intensity
                     spark.size = baseSize * (Math.random() * 0.4 + 0.8); // Add slight variation
                     
+                    // 2% of sparks when mouse pressed are blue
+                    if (mousePressed && Math.random() < 0.005) {
+                        spark.color = { r: 100 + Math.random() * 50, g: 100 + Math.random() * 50, b: 255 };
+                    }
+                    
                     particles.push(spark);
                 }
             }
@@ -2330,8 +2363,21 @@
 
         // Animation loop with performance optimization
         function animate(currentTime) {
-            // Clear canvas completely (transparent)
+            frameCount++;
+            
+            // Clear main canvas completely (transparent)
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Periodically fully clear haywire canvas to prevent pixel accumulation
+            if (frameCount % 90 === 0) {
+                haywireCtx.clearRect(0, 0, haywireCanvas.width, haywireCanvas.height);
+            } else {
+                // Apply motion blur effect to haywire canvas by fading existing pixels
+                haywireCtx.globalCompositeOperation = 'destination-out';
+                haywireCtx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+                haywireCtx.fillRect(0, 0, haywireCanvas.width, haywireCanvas.height);
+                haywireCtx.globalCompositeOperation = 'source-over'; // Reset to normal drawing
+            }
             
             // Update and draw particles (reverse loop for safe removal)
             for (let i = particles.length - 1; i >= 0; i--) {
