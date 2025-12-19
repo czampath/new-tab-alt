@@ -1681,6 +1681,63 @@
         // Initial render
         renderBookmarks();
 
+        // UI hover detection flag (optimized with event delegation)
+        let isOverUIFlag = false;
+
+        // Event delegation for UI hover detection (prevents memory leaks)
+        // Using mouseover/mouseout instead of mouseenter/mouseleave because they bubble
+        document.body.addEventListener('mouseover', (e) => {
+            const uiSelectors = [
+                '.time-display',
+                '.search-box',
+                '.bookmarks-section',
+                '.settings-btn',
+                '.settings-panel',
+                'input',
+                'button'
+            ];
+
+            // Check if event target matches any UI selector
+            for (const selector of uiSelectors) {
+                if (e.target.matches(selector) || e.target.closest(selector)) {
+                    isOverUIFlag = true;
+                    return;
+                }
+            }
+        });
+
+        document.body.addEventListener('mouseout', (e) => {
+            const uiSelectors = [
+                '.time-display',
+                '.search-box',
+                '.bookmarks-section',
+                '.settings-btn',
+                '.settings-panel',
+                'input',
+                'button'
+            ];
+
+            // Check if we're leaving a UI element
+            for (const selector of uiSelectors) {
+                if (e.target.matches(selector) || e.target.closest(selector)) {
+                    // Only set flag to false if relatedTarget is not also a UI element
+                    let isRelatedUI = false;
+                    if (e.relatedTarget) {
+                        for (const sel of uiSelectors) {
+                            if (e.relatedTarget.matches && (e.relatedTarget.matches(sel) || e.relatedTarget.closest(sel))) {
+                                isRelatedUI = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (!isRelatedUI) {
+                        isOverUIFlag = false;
+                    }
+                    return;
+                }
+            }
+        });
+
         // Cat animation
         const catContainer = document.getElementById('catAnimation');
         let catAnimation = null;
@@ -1723,6 +1780,7 @@
         let actualScheduledTime = null; // The actual time when cat will appear
         let recentDanglePositions = []; // Track recent positions to detect concentrated vs spread dangles
         let debugMeterVisible = false; // Track debug meter visibility
+        let isMousePressed = false; // Track if mouse button is pressed
 
         // Toggle debug meter visibility with Ctrl+Shift+D
         document.addEventListener('keydown', (e) => {
@@ -1731,6 +1789,15 @@
                 document.getElementById('debugMeter').style.display = debugMeterVisible ? 'block' : 'none';
                 e.preventDefault();
             }
+        });
+
+        // Track mouse button state
+        document.addEventListener('mousedown', () => {
+            isMousePressed = true;
+        });
+
+        document.addEventListener('mouseup', () => {
+            isMousePressed = false;
         });
 
         // Update debug meter
@@ -1795,6 +1862,12 @@
 
         // Click summoning detection
         document.addEventListener('click', (e) => {
+            // Skip if any modal or settings panel is open
+            if (isModalOrPanelOpen()) return;
+            
+            // Skip if cursor is over UI elements
+            if (isOverUIFlag) return;
+            
             const cursorY = e.clientY;
             const viewportHeight = window.innerHeight;
             
@@ -1817,14 +1890,33 @@
             }
         });
 
+        // Helper function to check if any modal or settings panel is open
+        function isModalOrPanelOpen() {
+            const modal = document.getElementById('bookmarkModal');
+            const guideModal = document.getElementById('guideModal');
+            const settingsPanel = document.getElementById('settingsPanel');
+            
+            return modal.classList.contains('active') ||
+                   guideModal.classList.contains('active') ||
+                   settingsPanel.classList.contains('active');
+        }
+        
         // Cursor dangling detection
         document.addEventListener('mousemove', (e) => {
             cursorX = e.clientX;
             const cursorY = e.clientY;
             const viewportHeight = window.innerHeight;
             
+            // Skip if any modal or settings panel is open
+            if (isModalOrPanelOpen()) {
+                lastCursorX = cursorX;
+                lastCursorY = cursorY;
+                return;
+            }
+            
             // Only count movement in bottom portion of screen
-            if (cursorY > viewportHeight * (1 - catDangleParams.activeZoneRatio)) {
+            // Skip if cursor is over UI elements
+            if (cursorY > viewportHeight * (1 - catDangleParams.activeZoneRatio) && !isOverUIFlag) {
                 if (lastCursorX !== null && lastCursorY !== null) {
                     // Calculate movement distance
                     const dx = cursorX - lastCursorX;
@@ -1880,9 +1972,10 @@
                     );
                     const intensityGain = dangleIntensity - previousIntensity;
                     
-                    // Create sparks only for significant intensity increases (threshold: 1.5)
-                    if (intensityGain > .18 && window.createDangleSparks) {
-                        window.createDangleSparks(cursorX, cursorY, intensityGain);
+                    // Create sparks only for significant intensity increases
+                    // Skip if cursor is over UI elements
+                    if (intensityGain > .18 && window.createDangleSparks && !isOverUIFlag) {
+                        window.createDangleSparks(cursorX, cursorY, intensityGain, isMousePressed);
                     }
                     
                     // Check if we should reschedule cat appearance
@@ -1910,7 +2003,7 @@
 
         // Check if dangling warrants rescheduling the cat
         function maybeRescheduleCat() {
-            if (!scheduledCatTimeout || !currentScheduledTime || isAnimating) return;
+            if (!scheduledCatTimeout || !currentScheduledTime || isAnimating || isModalOrPanelOpen()) return;
             
             const newTime = calculateReducedTime(currentScheduledTime.originalTime);
             const elapsed = Date.now() - currentScheduledTime.startedAt;
@@ -1950,7 +2043,7 @@
         }
 
         function playCatAnimation() {
-            if (isAnimating) return;
+            if (isAnimating || isModalOrPanelOpen()) return;
             isAnimating = true;
 
             // Position cat under cursor (clamped to 5-80% range)
@@ -2169,10 +2262,10 @@
 
         // Particle pool
         const particles = [];
-        const MAX_PARTICLES = 150; // Limit for performance
+        const MAX_PARTICLES = 500; // Limit for performance (increased for mouse-pressed mode)
         
         // Function to create sparks at cursor position (called from dangle detection)
-        window.createDangleSparks = function(x, y, intensity) {
+        window.createDangleSparks = function(x, y, intensity, mousePressed = false) {
             // Scale spark size based on intensity
             // For small dangle intensities (0.18-2), use larger base
             // For large click intensities (3+), use smaller multiplier
@@ -2187,7 +2280,12 @@
                 velocityMultiplier = (Math.random() * 2 + 1.2) * (intensity * 0.4); // Moderate spread
             }
             
-            const sparkCount = Math.min(Math.floor(intensity * 3) + 1, 8); // Scale with intensity
+            let sparkCount = Math.min(Math.floor(intensity * 3) + 1, 8); // Scale with intensity
+            
+            // Double spark count if mouse is pressed during dangling
+            if (mousePressed && intensity < 2) {
+                sparkCount = sparkCount * 1.5;
+            }
             
             for (let i = 0; i < sparkCount; i++) {
                 if (particles.length < MAX_PARTICLES) {
