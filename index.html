@@ -2050,16 +2050,50 @@
         }
         resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
+        
+        // Cursor velocity tracking
+        let cursorVelocity = { x: 0, y: 0 };
+        let lastCursorPos = { x: 0, y: 0 };
+        let lastCursorTime = Date.now();
+        
+        // Track cursor movement for velocity calculation
+        window.addEventListener('mousemove', (e) => {
+            const currentTime = Date.now();
+            const dt = Math.max(currentTime - lastCursorTime, 1) / 16; // Normalize to ~60fps
+            
+            // Calculate velocity
+            const dx = e.clientX - lastCursorPos.x;
+            const dy = e.clientY - lastCursorPos.y;
+            
+            // Smooth velocity with damping
+            cursorVelocity.x = (dx / dt) * 0.3 + cursorVelocity.x * 0.7;
+            cursorVelocity.y = (dy / dt) * 0.3 + cursorVelocity.y * 0.7;
+            
+            lastCursorPos = { x: e.clientX, y: e.clientY };
+            lastCursorTime = currentTime;
+        });
 
         // Particle class with realistic physics
         class Spark {
-            constructor(x, y, vx, vy, isHaywire = false) {
+            constructor(x, y, vx, vy, isHaywire = false, cursorVel = { x: 0, y: 0 }) {
                 this.x = x;
                 this.y = y;
-                this.vx = vx;
-                this.vy = vy;
+                
+                // Apply cursor velocity influence to non-haywire sparks
+                if (!isHaywire) {
+                    const velocityInfluence = 0.05; // How much cursor velocity affects sparks
+                    this.vx = vx + cursorVel.x * velocityInfluence;
+                    this.vy = vy + cursorVel.y * velocityInfluence;
+                } else {
+                    this.vx = vx;
+                    this.vy = vy;
+                }
+                
                 this.life = 1.0;
-                this.decay = Math.random() * 0.003 + 0.002; // Much slower decay for longer life
+                // Haywire sparks live twice as long (half the decay rate)
+                this.decay = isHaywire 
+                    ? (Math.random() * 0.0015 + 0.001) 
+                    : (Math.random() * 0.003 + 0.002);
                 this.size = Math.random() * 0.8 + 0.3;
                 this.gravity = 0.02; // Much slower falling
                 this.friction = 0.98;
@@ -2175,7 +2209,8 @@
                         y + offsetY,
                         vx,
                         vy,
-                        isHaywire
+                        isHaywire,
+                        cursorVelocity
                     );
                     // Override size based on intensity
                     spark.size = baseSize * (Math.random() * 0.4 + 0.8); // Add slight variation
