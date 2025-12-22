@@ -2158,6 +2158,225 @@
         const haywireCanvas = document.getElementById('haywireCanvas');
         const haywireCtx = haywireCanvas.getContext('2d', { alpha: true });
         
+        // Audio context for continuous spark sound
+        let audioContext = null;
+        let sparkNoiseSource = null;
+        let sparkGainNode = null;
+        let sparkFilter = null;
+        let sparkPanner = null;
+        let haywireOscillator = null;
+        let haywireGainNode = null;
+        let haywireFilter = null;
+        let haywirePanner = null;
+        let isAudioInitialized = false;
+        let targetVolume = 0;
+        let currentVolume = 0;
+        let targetHaywireVolume = 0;
+        let currentHaywireVolume = 0;
+        
+        // Initialize audio context and continuous noise source
+        function initAudioContext() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            
+            // Resume if suspended
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+            
+            if (!isAudioInitialized) {
+                // Create continuous white noise buffer (1 second loop)
+                const bufferSize = audioContext.sampleRate;
+                const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+                const data = noiseBuffer.getChannelData(0);
+                
+                // Generate sharper, more erratic noise bursts (like haywire style)
+                for (let i = 0; i < bufferSize; i++) {
+                    const randomThreshold = Math.random();
+                    
+                    if (randomThreshold < 0.2) {
+                        // Sharp noise bursts
+                        const burstIntensity = Math.random() * 1.5;
+                        data[i] = (Math.random() * 2 - 1) * burstIntensity;
+                    } else {
+                        // Sparse, quiet background
+                        data[i] = (Math.random() * 2 - 1) * 0.08;
+                    }
+                }
+                
+                // Create audio nodes
+                sparkNoiseSource = audioContext.createBufferSource();
+                sparkNoiseSource.buffer = noiseBuffer;
+                sparkNoiseSource.loop = true;
+                
+                sparkFilter = audioContext.createBiquadFilter();
+                sparkFilter.type = 'highpass'; // Same as haywire style
+                sparkFilter.frequency.value = 3000;
+                sparkFilter.Q.value = 0.8;
+                
+                sparkPanner = audioContext.createStereoPanner();
+                sparkPanner.pan.value = 0; // Start centered
+                
+                sparkGainNode = audioContext.createGain();
+                sparkGainNode.gain.value = 0; // Start silent
+                
+                // Connect: source -> filter -> panner -> gain -> destination
+                sparkNoiseSource.connect(sparkFilter);
+                sparkFilter.connect(sparkPanner);
+                sparkPanner.connect(sparkGainNode);
+                sparkGainNode.connect(audioContext.destination);
+                
+                sparkNoiseSource.start();
+                
+                // Create haywire spark sound - noisy, glitchy texture (not tonal)
+                // Use noise buffer with different character than regular sparks
+                const haywireBufferSize = audioContext.sampleRate;
+                const haywireNoiseBuffer = audioContext.createBuffer(1, haywireBufferSize, audioContext.sampleRate);
+                const haywireData = haywireNoiseBuffer.getChannelData(0);
+                
+                // Generate sharper, more erratic noise bursts
+                for (let i = 0; i < haywireBufferSize; i++) {
+                    const randomThreshold = Math.random();
+                    
+                    if (randomThreshold < 0.2) {
+                        // Sharp noise bursts
+                        const burstIntensity = Math.random() * 1.5;
+                        haywireData[i] = (Math.random() * 2 - 1) * burstIntensity;
+                    } else {
+                        // Sparse, quiet background
+                        haywireData[i] = (Math.random() * 2 - 1) * 0.08;
+                    }
+                }
+                
+                haywireOscillator = audioContext.createBufferSource();
+                haywireOscillator.buffer = haywireNoiseBuffer;
+                haywireOscillator.loop = true;
+                
+                haywireFilter = audioContext.createBiquadFilter();
+                haywireFilter.type = 'highpass'; // Let through higher frequencies for crisp texture
+                haywireFilter.frequency.value = 3000;
+                haywireFilter.Q.value = 0.8;
+                
+                haywirePanner = audioContext.createStereoPanner();
+                haywirePanner.pan.value = 0; // Start centered
+                
+                haywireGainNode = audioContext.createGain();
+                haywireGainNode.gain.value = 0; // Start silent
+                
+                // Connect haywire chain: source -> filter -> panner -> gain -> destination
+                haywireOscillator.connect(haywireFilter);
+                haywireFilter.connect(haywirePanner);
+                haywirePanner.connect(haywireGainNode);
+                haywireGainNode.connect(audioContext.destination);
+                
+                haywireOscillator.start();
+                
+                isAudioInitialized = true;
+            }
+        }
+        
+        // Update spark sound based on active particle count
+        function updateSparkSound() {
+            if (!isAudioInitialized || !sparkGainNode) return;
+            
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+            
+            // Count normal and haywire sparks separately
+            let normalCount = 0;
+            let haywireCount = 0;
+            let normalPanSum = 0;
+            let haywirePanSum = 0;
+            
+            for (let i = 0; i < particles.length; i++) {
+                // Calculate pan position based on particle X position (-1 left, +1 right)
+                // Reduced to 50% panning range (-0.5 to +0.5)
+                const panPosition = ((particles[i].x / canvas.width) * 2 - 1) * 0.5;
+                
+                if (particles[i].isHaywire) {
+                    haywireCount++;
+                    haywirePanSum += panPosition;
+                } else {
+                    normalCount++;
+                    normalPanSum += panPosition;
+                }
+            }
+            
+            // Update normal spark sound
+            const normalizedCount = Math.min(normalCount / 100, 1);
+            
+            // Only play sound if there are at least 3 particles
+            if (normalCount < 1) {
+                targetVolume = 0;
+            } else {
+                // Scale more gradually - need more particles to reach max volume
+                const adjustedCount = Math.min(normalCount / 200, 1); // Double the threshold
+                targetVolume = adjustedCount * 0.03; // Normal volume (5% max)
+            }
+            
+            // Faster fade out to match visual particle count more closely
+            const smoothing = normalCount > 0 ? 0.08 : 0.4; // Faster fade out
+            currentVolume += (targetVolume - currentVolume) * smoothing;
+            
+            // Apply volume with randomness for organic texture
+            const randomVariation = 0.6 + Math.random() * 0.8; // 60-140% variation
+            sparkGainNode.gain.value = currentVolume * randomVariation;
+            
+            // Vary filter frequency randomly for tonal variation
+            if (sparkFilter && normalCount > 0) {
+                // Random frequency variation
+                const filterVariation = 2500 + Math.random() * 2000;
+                sparkFilter.frequency.setValueAtTime(
+                    filterVariation, 
+                    audioContext.currentTime
+                );
+                
+                // Randomly vary Q factor too
+                sparkFilter.Q.value = 0.6 + Math.random() * 0.8;
+                
+                // Update stereo pan based on average particle position
+                if (sparkPanner) {
+                    const averagePan = normalPanSum / normalCount;
+                    sparkPanner.pan.setValueAtTime(averagePan, audioContext.currentTime);
+                }
+            }
+            
+            // Update haywire spark sound - noisy texture with slight variation
+            if (haywireOscillator && haywireGainNode && haywireFilter) {
+                // Only play sound if there are at least 2 haywire particles
+                if (haywireCount < 2) {
+                    targetHaywireVolume = 0;
+                } else {
+                    const normalizedHaywire = Math.min(haywireCount / 40, 1); // Double the threshold
+                    targetHaywireVolume = normalizedHaywire * 0.018; // Slightly raised since it's noise-based (1.8% max)
+                }
+                
+                const haywireSmoothing = haywireCount > 0 ? 0.12 : 0.4; // Faster fade out
+                currentHaywireVolume += (targetHaywireVolume - currentHaywireVolume) * haywireSmoothing;
+                currentHaywireVolume += (targetHaywireVolume - currentHaywireVolume) * haywireSmoothing;
+                
+                if (haywireCount > 0) {
+                    // Vary filter for tonal texture without pitch
+                    const filterVariation = 2500 + Math.random() * 2000;
+                    haywireFilter.frequency.setValueAtTime(filterVariation, audioContext.currentTime);
+                    
+                    // Subtle volume variation
+                    const glitchVolume = currentHaywireVolume * (0.7 + Math.random() * 0.5);
+                    haywireGainNode.gain.value = glitchVolume;
+                    
+                    // Update stereo pan based on average haywire particle position
+                    if (haywirePanner) {
+                        const averagePan = haywirePanSum / haywireCount;
+                        haywirePanner.pan.setValueAtTime(averagePan, audioContext.currentTime);
+                    }
+                } else {
+                    haywireGainNode.gain.value = 0;
+                }
+            }
+        }
+        
         // Set canvas size
         function resizeCanvas() {
             canvas.width = window.innerWidth;
@@ -2304,6 +2523,9 @@
         
         // Function to create sparks at cursor position (called from dangle detection)
         window.createDangleSparks = function(x, y, intensity, mousePressed = false) {
+            // Initialize audio on first interaction
+            initAudioContext();
+            
             // Scale spark size based on intensity
             // For small dangle intensities (0.18-2), use larger base
             // For large click intensities (3+), use smaller multiplier
@@ -2364,6 +2586,9 @@
         // Animation loop with performance optimization
         function animate(currentTime) {
             frameCount++;
+            
+            // Update continuous spark sound based on active particles
+            updateSparkSound();
             
             // Clear main canvas completely (transparent)
             ctx.clearRect(0, 0, canvas.width, canvas.height);
