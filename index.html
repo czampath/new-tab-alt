@@ -2387,6 +2387,21 @@
         resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
         
+        // Handle tab visibility changes to stop audio
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                // Immediately mute audio and clear particles when tab is hidden
+                if (sparkGainNode) sparkGainNode.gain.value = 0;
+                if (haywireGainNode) haywireGainNode.gain.value = 0;
+                
+                particles.length = 0;
+                currentVolume = 0;
+                currentHaywireVolume = 0;
+                targetVolume = 0;
+                targetHaywireVolume = 0;
+            }
+        });
+        
         // Cursor velocity tracking
         let cursorVelocity = { x: 0, y: 0 };
         let lastCursorPos = { x: 0, y: 0 };
