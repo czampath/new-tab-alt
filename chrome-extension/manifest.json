@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Override New Tab",
+  "version": "1.0",
+  "description": "Override Chrome's new tab policy. Set a custom URL for new tabs or use a local file.",
+  "permissions": [
+    "storage",
+    "tabs",
+    "webNavigation"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "chrome_url_overrides": {
+    "newtab": "newtab.html"
+  },
+  "options_page": "options.html",
+  "icons": {
+    "128": "icon128.png"
+  }
+}
