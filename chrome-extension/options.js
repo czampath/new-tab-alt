@@ -1,9 +1,9 @@
 // Load saved settings
 document.addEventListener('DOMContentLoaded', () => {
     chrome.storage.sync.get(['customUrl', 'redirectRules'], (result) => {
-        if (result.customUrl) {
-            document.getElementById('customUrl').value = result.customUrl;
-        }
+        // Set default URL if not already set
+        const customUrl = result.customUrl !== undefined ? result.customUrl : 'https://czampath.github.io/new-tab-alt/';
+        document.getElementById('customUrl').value = customUrl;
         
         // Load redirect rules
         const redirectRules = result.redirectRules || [];

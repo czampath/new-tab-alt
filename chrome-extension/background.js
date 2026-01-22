@@ -1,3 +1,14 @@
+// Set default URL when extension is first installed
+chrome.runtime.onInstalled.addListener((details) => {
+    if (details.reason === 'install') {
+        // Set default custom URL on first install
+        chrome.storage.sync.set({
+            customUrl: 'https://czampath.github.io/new-tab-alt/',
+            redirectRules: []
+        });
+    }
+});
+
 // Listen for new tab creation and update URL immediately
 chrome.tabs.onCreated.addListener((tab) => {
     // Only handle new tabs (no URL set yet)

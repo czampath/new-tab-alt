@@ -13,19 +13,7 @@
             width: 100%;
         }
     </style>
-    <script>
-        chrome.storage.sync.get(['customUrl'], (result) => {
-            const customUrl = result.customUrl ? result.customUrl.trim() : '';
-            if (customUrl) {
-                const validPrefixes = ['https://', 'http://', 'file://', 'ftp://', 'urn:', 'chrome-extension://', 'chrome://'];
-                if (validPrefixes.some(prefix => customUrl.startsWith(prefix))) {
-                    window.location.replace(customUrl);
-                }
-            } else {
-                window.location.replace('chrome://newtab');
-            }
-        });
-    </script>
+    <script src="newtab.js"></script>
 </head>
 <body></body>
 </html>

@@ -1074,14 +1074,22 @@
                 <h4>Setup Instructions</h4>
                 <p>Replace your browser's default new tab with this lightweight, customizable page:</p>
                 <ol>
-                    <li>Install the Chrome extension: <a href="https://chromewebstore.google.com/detail/override-chromes-new-tab/blipilanfdpkfifjekjokjahpjnngifa" target="_blank">Override Chrome's New Tab</a></li>
-                    <li>After installation, set the URL to: <span class="highlight">https://czampath.github.io/new-tab-alt/</span></li>
-                    <li>Save and open a new tab to see your custom page!</li>
+                    <li>Download the extension: <a href="https://github.com/czampath/new-tab-alt/releases/download/v1.0/chrome-extension.zip" target="_blank">chrome-extension.zip</a> from GitHub releases</li>
+                    <li>Extract the ZIP file to a folder on your computer</li>
+                    <li>Open Chrome and go to <span class="highlight" onclick="const range = document.createRange(); range.selectNodeContents(this); window.getSelection().removeAllRanges(); window.getSelection().addRange(range);" style="cursor: text;">chrome://extensions/</span></li>
+                    <li>Enable "Developer mode" (toggle in top right corner)</li>
+                    <li>Click "Load unpacked" and select the extracted folder</li>
+                    <li>Right-click the extension icon → Click "Options" (or go to extension details → "Extension options")</li>
+                    <li>The custom URL is already set to <span class="highlight" onclick="const range = document.createRange(); range.selectNodeContents(this); window.getSelection().removeAllRanges(); window.getSelection().addRange(range);" style="cursor: text;">https://czampath.github.io/new-tab-alt/</span> — just click "Save Settings"!</li>
+                    <li>Open a new tab to see your custom page</li>
                 </ol>
+                <p style="margin-top: 15px; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 8px; font-size: 13px;">
+                    <strong>Alternative:</strong> You can also use the 3rd party extension <a href="https://chromewebstore.google.com/detail/override-chromes-new-tab/blipilanfdpkfifjekjokjahpjnngifa" target="_blank" style="color: inherit; text-decoration: underline;">Override Chrome's New Tab</a> from the Chrome Web Store if you prefer.
+                </p>
 
                 <h4>Why Use This?</h4>
                 <p>• Bypass organization-enforced new tab pages<br>
-                • Lightweight (~30MB) and fast performance<br>
+                • Lightweight (~30KB) and fast performance<br>
                 • Fully customizable with your own bookmarks and settings<br>
                 • No data collection or privacy concerns</p>
 
@@ -1089,7 +1097,8 @@
                 <p>• Add custom bookmarks with Quick Access<br>
                 • Choose from beautiful gradient backgrounds<br>
                 • Optional weather display (requires free API key)<br>
-                • Search Google or navigate directly from the search bar</p>
+                • Search Google or navigate directly from the search bar<br>
+                • Set up URL redirects to automatically redirect specific sites</p>
             </div>
             <div class="modal-buttons">
                 <button class="modal-btn primary" id="guideCloseBtn">Got it!</button>
