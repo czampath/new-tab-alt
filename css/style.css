@@ -395,7 +395,7 @@ body.light-theme .bookmark:hover {
     line-height: 1.3;
 }
 
-.delete-btn {
+.edit-btn {
     position: absolute;
     top: 5px;
     right: 5px;
@@ -406,20 +406,28 @@ body.light-theme .bookmark:hover {
     height: 20px;
     border-radius: 50%;
     cursor: pointer;
-    font-size: 12px;
+    font-size: 11px;
     display: none;
     align-items: center;
     justify-content: center;
     transition: all 0.2s ease;
 }
 
-.delete-btn:hover {
+.edit-btn:hover {
     background: rgba(0, 0, 0, 0.6);
     transform: scale(1.1);
 }
 
-.bookmark:hover .delete-btn {
+.bookmark:hover .edit-btn {
     display: flex;
+}
+
+.modal-btn.danger {
+    background: rgba(220, 53, 69, 0.8);
+    color: #fff;
+}
+.modal-btn.danger:hover {
+    background: rgba(220, 53, 69, 1);
 }
 
 .modal {

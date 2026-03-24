@@ -222,33 +222,27 @@ function renderBookmarks() {
         titleDiv.className = 'bookmark-title';
         titleDiv.textContent = bookmark.title;
         
-        // Create delete button
-        const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'delete-btn';
-        deleteBtn.textContent = '×';
-        deleteBtn.addEventListener('click', (event) => deleteBookmark(event, index));
+        // Create edit button
+        const editBtn = document.createElement('button');
+        editBtn.className = 'edit-btn';
+        editBtn.textContent = '✎';
+        editBtn.addEventListener('click', (event) => editBookmark(event, index));
         
         bookmarkEl.appendChild(iconSpan);
         bookmarkEl.appendChild(titleDiv);
-        bookmarkEl.appendChild(deleteBtn);
+        bookmarkEl.appendChild(editBtn);
         grid.appendChild(bookmarkEl);
     });
 }
 
-// Delete bookmark
-function deleteBookmark(event, index) {
-    event.preventDefault();
-    event.stopPropagation();
-    bookmarks.splice(index, 1);
-    localStorage.setItem('bookmarks', JSON.stringify(bookmarks));
-    renderBookmarks();
-}
-
 // Modal handling
+let editingIndex = -1;
 const modal = document.getElementById('bookmarkModal');
+const modalTitle = modal.querySelector('h3');
 const addBtn = document.getElementById('addBookmarkBtn');
 const cancelBtn = document.getElementById('cancelBtn');
 const saveBtn = document.getElementById('saveBtn');
+const deleteBtn = document.getElementById('deleteBtn');
 
 function closeModal() {
     modal.classList.add('closing');
@@ -260,12 +254,24 @@ function closeModal() {
 }
 
 addBtn.addEventListener('click', () => {
+    editingIndex = -1;
+    modalTitle.textContent = 'Add New Site';
+    deleteBtn.style.display = 'none';
     modal.classList.add('active');
     document.getElementById('bookmarkTitle').focus();
 });
 
 cancelBtn.addEventListener('click', () => {
     closeModal();
+});
+
+deleteBtn.addEventListener('click', () => {
+    if (editingIndex >= 0) {
+        bookmarks.splice(editingIndex, 1);
+        localStorage.setItem('bookmarks', JSON.stringify(bookmarks));
+        renderBookmarks();
+        closeModal();
+    }
 });
 
 let modalMouseDownTarget = null;
@@ -304,7 +310,12 @@ saveBtn.addEventListener('click', () => {
             return;
         }
         
-        bookmarks.push({ title, url: sanitized });
+        if (editingIndex >= 0) {
+            bookmarks[editingIndex] = { title, url: sanitized };
+            editingIndex = -1;
+        } else {
+            bookmarks.push({ title, url: sanitized });
+        }
         localStorage.setItem('bookmarks', JSON.stringify(bookmarks));
         renderBookmarks();
         closeModal();
@@ -327,6 +338,20 @@ document.getElementById('bookmarkUrl').addEventListener('keypress', (e) => {
 function clearForm() {
     document.getElementById('bookmarkTitle').value = '';
     document.getElementById('bookmarkUrl').value = '';
+    editingIndex = -1;
+}
+
+// Edit bookmark
+function editBookmark(event, index) {
+    event.preventDefault();
+    event.stopPropagation();
+    editingIndex = index;
+    modalTitle.textContent = 'Edit Site';
+    deleteBtn.style.display = '';
+    document.getElementById('bookmarkTitle').value = bookmarks[index].title;
+    document.getElementById('bookmarkUrl').value = bookmarks[index].url;
+    modal.classList.add('active');
+    document.getElementById('bookmarkTitle').focus();
 }
 
 // Guide modal handling
