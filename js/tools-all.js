@@ -80,7 +80,7 @@ ToolManager.register('markdown-viewer', {
         input.addEventListener('input', render);
         // Load marked.js lazily
         if (!this._markedLoaded) {
-            loadScript('lib/marked.min.js')
+            loadScript('https://cdn.jsdelivr.net/npm/marked/marked.min.js')
                 .then(() => { this._markedLoaded = true; render(); })
                 .catch(() => render());
         }
@@ -162,7 +162,7 @@ ToolManager.register('sql-formatter', {
         const input = document.getElementById('tsInput');
         const output = document.getElementById('tsOutput');
         const dialect = document.getElementById('tsDialect');
-        const loadFmt = () => loadScript('lib/sql-formatter.min.js');
+        const loadFmt = () => loadScript('https://cdn.jsdelivr.net/npm/sql-formatter@4.0.2/dist/sql-formatter.min.js');
         document.getElementById('tsFmt').onclick = async () => {
             try {
                 await loadFmt();
