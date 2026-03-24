@@ -61,11 +61,17 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// Function to get favicon URL
+// Function to get favicon URL (local letter-icon fallback, no external requests)
 function getFaviconUrl(url) {
     try {
-        const domain = new URL(url).origin;
-        return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+        const hostname = new URL(url).hostname;
+        const letter = hostname.replace(/^www\./, '').charAt(0).toUpperCase();
+        // Generate a deterministic color from the hostname
+        let hash = 0;
+        for (let i = 0; i < hostname.length; i++) hash = hostname.charCodeAt(i) + ((hash << 5) - hash);
+        const hue = Math.abs(hash) % 360;
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" rx="12" fill="hsl(${hue},50%,40%)"/><text x="32" y="44" text-anchor="middle" font-family="Inter,sans-serif" font-size="32" font-weight="600" fill="#fff">${letter}</text></svg>`;
+        return `data:image/svg+xml,${encodeURIComponent(svg)}`;
     } catch {
         return '';
     }
