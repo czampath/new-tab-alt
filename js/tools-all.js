@@ -357,54 +357,108 @@ ToolManager.register('diff-viewer', {
             <div class="tool-actions">
                 <button class="tool-btn primary" id="tdCompare">Compare</button>
                 <button class="tool-btn" id="tdSwap">Swap</button>
+                <button class="tool-btn" id="tdClearLeft">Clear Original</button>
+                <button class="tool-btn" id="tdClearRight">Clear Modified</button>
             </div>
             <div class="tool-split" style="flex:1;" id="tdInputs">
                 <div style="display:flex;flex-direction:column;gap:4px;flex:1;">
-                    <span class="tool-label">Original</span>
+                    <input class="tool-label-input" id="tdLeftLabel" value="${s.leftLabel || 'Original'}" placeholder="Label...">
                     <textarea class="tool-textarea" id="tdLeft" placeholder="Original text...">${s.left || ''}</textarea>
                 </div>
                 <div style="display:flex;flex-direction:column;gap:4px;flex:1;">
-                    <span class="tool-label">Modified</span>
+                    <input class="tool-label-input" id="tdRightLabel" value="${s.rightLabel || 'Modified'}" placeholder="Label...">
                     <textarea class="tool-textarea" id="tdRight" placeholder="Modified text...">${s.right || ''}</textarea>
                 </div>
             </div>
+            <div class="tool-resize-handle" id="tdResizeHandle" style="display:none;" title="Drag to resize"></div>
             <div class="tool-output" id="tdOutput" style="display:none;flex:1;"></div>
         </div>`;
+        // Resize handle logic
+        const resizeHandle = document.getElementById('tdResizeHandle');
+        const inputsEl = document.getElementById('tdInputs');
+        const output = document.getElementById('tdOutput');
+        let dragging = false, startY = 0, startInputH = 0, startOutputH = 0;
+        resizeHandle.addEventListener('mousedown', (e) => {
+            dragging = true;
+            startY = e.clientY;
+            startInputH = inputsEl.getBoundingClientRect().height;
+            startOutputH = output.getBoundingClientRect().height;
+            resizeHandle.classList.add('active');
+            document.body.style.cursor = 'ns-resize';
+            document.body.style.userSelect = 'none';
+            e.preventDefault();
+        });
+        document.addEventListener('mousemove', this._onMouseMove = (e) => {
+            if (!dragging) return;
+            const delta = e.clientY - startY;
+            const newInputH = Math.max(60, startInputH + delta);
+            const newOutputH = Math.max(60, startOutputH - delta);
+            inputsEl.style.flex = 'none';
+            inputsEl.style.height = newInputH + 'px';
+            output.style.flex = 'none';
+            output.style.height = newOutputH + 'px';
+        });
+        document.addEventListener('mouseup', this._onMouseUp = () => {
+            if (!dragging) return;
+            dragging = false;
+            resizeHandle.classList.remove('active');
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+        });
         document.getElementById('tdCompare').onclick = () => {
             const left = document.getElementById('tdLeft').value.split('\n');
             const right = document.getElementById('tdRight').value.split('\n');
-            const output = document.getElementById('tdOutput');
-            const inputsEl = document.getElementById('tdInputs');
             const maxLen = Math.max(left.length, right.length);
+            const leftLabel = document.getElementById('tdLeftLabel').value || 'Original';
+            const rightLabel = document.getElementById('tdRightLabel').value || 'Modified';
             let html = '';
             for (let i = 0; i < maxLen; i++) {
                 const l = left[i], r = right[i];
                 if (l === undefined) {
-                    html += `<div class="diff-line diff-added"><span class="diff-line-num">${i + 1}</span>+ ${this._esc(r)}</div>`;
+                    html += `<div class="diff-line diff-added"><span class="diff-line-num">${i + 1}</span><span class="diff-marker">+</span><span class="diff-text">${this._esc(r)}</span></div>`;
                 } else if (r === undefined) {
-                    html += `<div class="diff-line diff-removed"><span class="diff-line-num">${i + 1}</span>- ${this._esc(l)}</div>`;
+                    html += `<div class="diff-line diff-removed"><span class="diff-line-num">${i + 1}</span><span class="diff-marker">&minus;</span><span class="diff-text">${this._esc(l)}</span></div>`;
                 } else if (l !== r) {
-                    html += `<div class="diff-line diff-removed"><span class="diff-line-num">${i + 1}</span>- ${this._esc(l)}</div>`;
-                    html += `<div class="diff-line diff-added"><span class="diff-line-num">${i + 1}</span>+ ${this._esc(r)}</div>`;
+                    html += `<div class="diff-line diff-removed"><span class="diff-line-num">${i + 1}</span><span class="diff-marker">&minus;</span><span class="diff-text">${this._esc(l)}</span></div>`;
+                    html += `<div class="diff-line diff-added"><span class="diff-line-num">${i + 1}</span><span class="diff-marker">+</span><span class="diff-text">${this._esc(r)}</span></div>`;
                 } else {
-                    html += `<div class="diff-line"><span class="diff-line-num">${i + 1}</span>  ${this._esc(l)}</div>`;
+                    html += `<div class="diff-line"><span class="diff-line-num">${i + 1}</span><span class="diff-marker"></span><span class="diff-text">${this._esc(l)}</span></div>`;
                 }
             }
             output.innerHTML = html || '<span style="color:rgba(255,255,255,0.4)">No differences found</span>';
             output.style.display = '';
+            resizeHandle.style.display = '';
+            // Reset to flex-based sizing on fresh compare
+            inputsEl.style.height = '';
             inputsEl.style.flex = '0.6';
+            output.style.height = '';
+            output.style.flex = '1';
         };
         document.getElementById('tdSwap').onclick = () => {
             const l = document.getElementById('tdLeft');
             const r = document.getElementById('tdRight');
+            const ll = document.getElementById('tdLeftLabel');
+            const rl = document.getElementById('tdRightLabel');
             [l.value, r.value] = [r.value, l.value];
+            [ll.value, rl.value] = [rl.value, ll.value];
+        };
+        document.getElementById('tdClearLeft').onclick = () => {
+            document.getElementById('tdLeft').value = '';
+        };
+        document.getElementById('tdClearRight').onclick = () => {
+            document.getElementById('tdRight').value = '';
         };
     },
-    destroy() {},
+    destroy() {
+        if (this._onMouseMove) document.removeEventListener('mousemove', this._onMouseMove);
+        if (this._onMouseUp) document.removeEventListener('mouseup', this._onMouseUp);
+    },
     saveState() {
         this._state = {
             left: document.getElementById('tdLeft')?.value || '',
-            right: document.getElementById('tdRight')?.value || ''
+            right: document.getElementById('tdRight')?.value || '',
+            leftLabel: document.getElementById('tdLeftLabel')?.value || 'Original',
+            rightLabel: document.getElementById('tdRightLabel')?.value || 'Modified'
         };
     },
     loadState() {},
@@ -415,7 +469,7 @@ ToolManager.register('diff-viewer', {
 ToolManager.register('date-formatter', {
     _state: null,
     init(container) {
-        container.innerHTML = `<div class="tool-content">
+        container.innerHTML = `<div class="tool-content tool-content-compact">
             <div class="tool-row" style="flex-wrap:wrap;">
                 <input class="tool-input" id="tdtInput" placeholder="Enter date (any format)..." value="${this._state || ''}" style="flex:1;min-width:200px">
                 <button class="tool-btn primary" id="tdtParse">Parse</button>
@@ -495,7 +549,7 @@ ToolManager.register('date-formatter', {
 ToolManager.register('epoch-converter', {
     _interval: null,
     init(container) {
-        container.innerHTML = `<div class="tool-content">
+        container.innerHTML = `<div class="tool-content tool-content-compact">
             <div class="tool-card">
                 <div class="tool-row" style="justify-content:space-between">
                     <span class="tool-label">Current Epoch</span>
@@ -555,7 +609,7 @@ ToolManager.register('color-picker', {
     _state: null,
     init(container) {
         const s = this._state || { color: '#667eea', history: [] };
-        container.innerHTML = `<div class="tool-content">
+        container.innerHTML = `<div class="tool-content tool-content-compact">
             <div class="tool-row" style="gap:16px;align-items:flex-start;flex-wrap:wrap;">
                 <div class="tool-col" style="min-width:200px;">
                     <div class="color-swatch" id="tcSwatch" style="background:${s.color}"></div>
@@ -647,7 +701,7 @@ ToolManager.register('color-picker', {
 // ===== 10. Password Generator =====
 ToolManager.register('password-generator', {
     init(container) {
-        container.innerHTML = `<div class="tool-content">
+        container.innerHTML = `<div class="tool-content tool-content-compact">
             <div class="tool-card" style="text-align:center;padding:20px;">
                 <div id="tpOutput" style="font-family:Consolas,monospace;font-size:20px;word-break:break-all;min-height:30px;user-select:text;-webkit-user-select:text;letter-spacing:1px;"></div>
             </div>
@@ -713,7 +767,7 @@ ToolManager.register('password-generator', {
 // ===== 11. UUID / Hash Generator =====
 ToolManager.register('uuid-hash', {
     init(container) {
-        container.innerHTML = `<div class="tool-content">
+        container.innerHTML = `<div class="tool-content tool-content-compact">
             <div class="tool-section">
                 <span class="tool-label">UUID v4</span>
                 <div class="tool-row">
@@ -724,7 +778,7 @@ ToolManager.register('uuid-hash', {
             <div class="tool-divider"></div>
             <div class="tool-section">
                 <span class="tool-label">Hash Generator</span>
-                <textarea class="tool-textarea" id="tuText" placeholder="Enter text to hash..." style="min-height:80px;flex:none"></textarea>
+                <textarea class="tool-textarea" id="tuText" placeholder="Enter text to hash..." style="min-height:120px"></textarea>
                 <div class="tool-actions">
                     <button class="tool-btn primary" id="tuSha256">SHA-256</button>
                     <button class="tool-btn" id="tuSha512">SHA-512</button>
@@ -861,7 +915,7 @@ ToolManager.register('reminder', {
     _reminders: null,
     init(container) {
         this._reminders = JSON.parse(localStorage.getItem('tool-state-reminder') || '[]');
-        container.innerHTML = `<div class="tool-content">
+        container.innerHTML = `<div class="tool-content tool-content-compact">
             <div class="tool-row" style="flex-wrap:wrap;">
                 <input class="tool-input" id="trmTitle" placeholder="Reminder title..." style="flex:1;min-width:150px">
                 <input class="tool-input" id="trmTime" type="datetime-local" style="flex:0 0 auto">
@@ -925,7 +979,7 @@ ToolManager.register('reminder', {
 ToolManager.register('keep-awake', {
     init(container) {
         const active = isWakeLockActive();
-        container.innerHTML = `<div class="tool-content" style="align-items:center;justify-content:center;gap:24px;text-align:center;">
+        container.innerHTML = `<div class="tool-content tool-content-compact" style="align-items:center;justify-content:center;gap:24px;text-align:center;">
             <div style="font-size:64px;">☕</div>
             <div style="font-size:18px;font-weight:500;">Keep Screen Awake</div>
             <div style="font-size:13px;color:rgba(255,255,255,0.5);max-width:360px;line-height:1.6;">
@@ -965,7 +1019,7 @@ ToolManager.register('screensaver', {
     _raf: null, _canvas: null, _listeners: {},
     init(container) {
         const saved = JSON.parse(localStorage.getItem('tool-state-screensaver') || '{}');
-        container.innerHTML = `<div class="tool-content" style="align-items:center;justify-content:center;gap:20px;text-align:center;">
+        container.innerHTML = `<div class="tool-content tool-content-compact" style="align-items:center;justify-content:center;gap:20px;text-align:center;">
             <div style="font-size:64px;">🖥</div>
             <div style="font-size:18px;font-weight:500;">Screen Saver</div>
             <div style="font-size:13px;color:rgba(255,255,255,0.5);max-width:400px;line-height:1.6;">

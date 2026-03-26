@@ -441,9 +441,22 @@ body.light-theme .tool-strip-item::after {
     display: inline-block;
     width: 35px;
     text-align: right;
-    margin-right: 12px;
+    margin-right: 8px;
     color: rgba(255,255,255,0.25);
     user-select: none;
+}
+.diff-marker {
+    display: inline-block;
+    width: 14px;
+    text-align: center;
+    margin-right: 6px;
+    user-select: none;
+    -webkit-user-select: none;
+    font-weight: 600;
+}
+.diff-text {
+    user-select: text;
+    -webkit-user-select: text;
 }
 
 /* Notes */
@@ -588,10 +601,15 @@ body.light-theme .tool-strip-item::after {
     background: rgba(0,0,0,0.4);
     padding: 14px;
     border-radius: 8px;
-    overflow-x: auto;
+    overflow-x: hidden;
+    overflow-y: visible;
+    max-height: none;
     margin: 10px 0;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    flex-shrink: 0;
 }
-.md-preview pre code { background: transparent; padding: 0; }
+.md-preview pre code { background: transparent; padding: 0; white-space: pre-wrap; word-wrap: break-word; }
 .md-preview blockquote {
     border-left: 3px solid rgba(102,126,234,0.5);
     padding: 4px 14px;
@@ -615,6 +633,83 @@ body.light-theme .tool-strip-item::after {
 /* Presentation mode */
 .tool-viewport.presentation .tool-viewport-header { display: none; }
 .tool-viewport.presentation .tool-viewport-body { padding: 0; }
+
+/* Compact layout for tools that don't need full width */
+.tool-content-compact {
+    width: 100%;
+    max-width: 760px;
+    margin: 0 auto;
+}
+
+/* Resizable handle between panes */
+.tool-resize-handle {
+    height: 7px;
+    cursor: ns-resize;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border-radius: 4px;
+    transition: background 0.15s;
+}
+.tool-resize-handle:hover,
+.tool-resize-handle.active {
+    background: rgba(102,126,234,0.25);
+}
+.tool-resize-handle::after {
+    content: '';
+    width: 40px;
+    height: 3px;
+    border-radius: 2px;
+    background: rgba(255,255,255,0.15);
+    transition: background 0.15s;
+}
+.tool-resize-handle:hover::after,
+.tool-resize-handle.active::after {
+    background: rgba(102,126,234,0.5);
+}
+
+/* Diff tool editable label */
+.tool-label-input {
+    font-size: 12px;
+    font-weight: 500;
+    color: rgba(255,255,255,0.5);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    padding: 2px 6px;
+    outline: none;
+    font-family: 'Roboto', sans-serif;
+    transition: border-color 0.2s, background 0.2s;
+    width: 100%;
+}
+.tool-label-input:hover {
+    border-color: rgba(255,255,255,0.1);
+}
+.tool-label-input:focus {
+    border-color: rgba(102,126,234,0.4);
+    background: rgba(0,0,0,0.2);
+    color: rgba(255,255,255,0.8);
+}
+body.light-theme .tool-label-input {
+    color: rgba(0,0,0,0.5);
+}
+body.light-theme .tool-label-input:hover {
+    border-color: rgba(0,0,0,0.1);
+}
+body.light-theme .tool-label-input:focus {
+    border-color: rgba(102,126,234,0.4);
+    background: rgba(0,0,0,0.04);
+    color: rgba(0,0,0,0.8);
+}
+
+/* Diff output selectability */
+.diff-line {
+    user-select: text;
+    -webkit-user-select: text;
+}
 
 /* ===== Responsive ===== */
 @media (max-width: 600px) {
