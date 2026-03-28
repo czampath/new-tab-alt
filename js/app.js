@@ -61,11 +61,11 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// Function to get favicon URL
+// Function to get favicon URL (only sends root domain, never the full URL)
 function getFaviconUrl(url) {
     try {
-        const domain = new URL(url).origin;
-        return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+        const hostname = new URL(url).hostname.replace(/^www\./, '');
+        return `https://www.google.com/s2/favicons?domain=${hostname}&sz=64`;
     } catch {
         return '';
     }
