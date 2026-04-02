@@ -892,6 +892,8 @@ ToolManager.register('notes', {
             this._activeId = newNote.id;
             loadNote();
             renderSidebar();
+            localStorage.setItem('tool-state-notes', JSON.stringify(this._notes));
+            TabManager._updateBadge('notes');
         };
         document.getElementById('tnDel').onclick = () => {
             if (this._notes.length <= 1) { showToast('Cannot delete last note'); return; }
@@ -900,6 +902,7 @@ ToolManager.register('notes', {
             loadNote();
             renderSidebar();
             localStorage.setItem('tool-state-notes', JSON.stringify(this._notes));
+            TabManager._updateBadge('notes');
         };
         loadNote();
         renderSidebar();
@@ -952,6 +955,7 @@ ToolManager.register('reminder', {
                 btn.onclick = () => {
                     this._reminders = this._reminders.filter(r => r.id !== parseInt(btn.dataset.rid));
                     localStorage.setItem('tool-state-reminder', JSON.stringify(this._reminders));
+                    TabManager._updateBadge('reminder');
                     renderList();
                 };
             });
@@ -965,6 +969,7 @@ ToolManager.register('reminder', {
             document.getElementById('trmTitle').value = '';
             document.getElementById('trmTime').value = '';
             renderList();
+            TabManager._updateBadge('reminder');
             showToast('Reminder set!');
         };
         renderList();
