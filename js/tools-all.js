@@ -2,9 +2,219 @@
 //  All Tool Registrations
 // ============================================================
 
+// ===== In-house Code Editor Component =====
+function createCodeEditor(wrapper, opts) {
+    const { language = 'json', placeholder = '', taId = '', value = '' } = opts || {};
+
+    wrapper.classList.add('ce-wrap');
+    wrapper.innerHTML = `
+        <div class="ce-gutter" aria-hidden="true"><div class="ce-gutter-inner"></div></div>
+        <div class="ce-body">
+            <pre class="ce-highlight" aria-hidden="true"><code class="ce-code"></code></pre>
+            <textarea class="ce-ta"${taId ? ` id="${taId}"` : ''} spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off" placeholder="${placeholder}"></textarea>
+        </div>`;
+
+    const gutterInner = wrapper.querySelector('.ce-gutter-inner');
+    const ceCode      = wrapper.querySelector('.ce-code');
+    const cePre       = wrapper.querySelector('.ce-highlight');
+    const ta          = wrapper.querySelector('.ce-ta');
+
+    function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    function hlJson(text) {
+        return escHtml(text).replace(
+            /("(?:\\u[\da-fA-F]{4}|\\[^u]|[^\\"])*"(?:\s*:)?|\b(?:true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+            m => {
+                let cls = 'json-number';
+                if (/^"/.test(m)) cls = /:$/.test(m) ? 'json-key' : 'json-string';
+                else if (/true|false/.test(m)) cls = 'json-bool';
+                else if (/null/.test(m)) cls = 'json-null';
+                return `<span class="${cls}">${m}</span>`;
+            }
+        );
+    }
+
+    const SQL_KW_RE = /\b(SELECT|FROM|WHERE|AND|OR|NOT|IN|IS|NULL|JOIN|LEFT|RIGHT|INNER|OUTER|FULL|CROSS|NATURAL|ON|AS|USING|GROUP|ORDER|BY|HAVING|LIMIT|OFFSET|UNION|INTERSECT|EXCEPT|ALL|DISTINCT|TOP|INTO|VALUES|INSERT|UPDATE|SET|DELETE|MERGE|CREATE|ALTER|DROP|TABLE|VIEW|INDEX|DATABASE|SCHEMA|COLUMN|CONSTRAINT|PRIMARY|KEY|FOREIGN|REFERENCES|UNIQUE|DEFAULT|CHECK|AUTO_INCREMENT|IDENTITY|SERIAL|SEQUENCE|TRIGGER|PROCEDURE|FUNCTION|RETURNS|RETURN|DECLARE|BEGIN|END|COMMIT|ROLLBACK|TRANSACTION|IF|ELSE|CASE|WHEN|THEN|ELSEIF|EXISTS|BETWEEN|LIKE|ILIKE|REGEXP|ANY|SOME|OVER|PARTITION|WINDOW|ROWS|RANGE|PRECEDING|FOLLOWING|CURRENT|ROW|UNBOUNDED|RECURSIVE|WITH|TRUNCATE|EXEC|EXECUTE|CALL|GRANT|REVOKE|FETCH|NEXT|FIRST|LAST|NULLS|ASC|DESC|COALESCE|NULLIF|CAST|CONVERT|EXTRACT|LOWER|UPPER|LENGTH|SUBSTRING|REPLACE|CONCAT|COUNT|SUM|AVG|MIN|MAX|ROUND|FLOOR|CEIL|CEILING|ABS|NOW|GETDATE|SYSDATE|TRUE|FALSE)\b/gi;
+
+    function hlSql(text) {
+        const toks = [];
+        let i = 0;
+        while (i < text.length) {
+            if (text[i] === "'") {
+                let j = i + 1;
+                while (j < text.length) {
+                    if (text[j] === "'" && text[j+1] === "'") { j += 2; continue; }
+                    if (text[j] === "'") { j++; break; }
+                    j++;
+                }
+                toks.push({ t: 'str',   v: text.slice(i, j) }); i = j;
+            } else if (text[i] === '"') {
+                let j = i + 1;
+                while (j < text.length && text[j] !== '"') j++;
+                toks.push({ t: 'ident', v: text.slice(i, j + 1) }); i = j + 1;
+            } else if (text[i] === '/' && text[i+1] === '*') {
+                let j = i + 2;
+                while (j < text.length - 1 && !(text[j] === '*' && text[j+1] === '/')) j++;
+                toks.push({ t: 'cmt',   v: text.slice(i, j + 2) }); i = j + 2;
+            } else if (text[i] === '-' && text[i+1] === '-') {
+                let j = i + 2;
+                while (j < text.length && text[j] !== '\n') j++;
+                toks.push({ t: 'cmt',   v: text.slice(i, j) }); i = j;
+            } else {
+                let j = i;
+                while (j < text.length && text[j] !== "'" && text[j] !== '"' &&
+                       !(text[j] === '/' && text[j+1] === '*') &&
+                       !(text[j] === '-' && text[j+1] === '-')) j++;
+                if (j === i) j++;
+                toks.push({ t: 'code',  v: text.slice(i, j) }); i = j;
+            }
+        }
+        return toks.map(tok => {
+            const v = escHtml(tok.v);
+            if (tok.t === 'str')   return `<span class="sql-str">${v}</span>`;
+            if (tok.t === 'cmt')   return `<span class="sql-cmt">${v}</span>`;
+            if (tok.t === 'ident') return `<span class="sql-ident">${v}</span>`;
+            return v.replace(/\b(\d+(?:\.\d*)?)\b/g, '<span class="sql-num">$1</span>')
+                    .replace(SQL_KW_RE, '<span class="sql-kw">$1</span>');
+        }).join('');
+    }
+
+    function highlight(text) {
+        if (language === 'json') return hlJson(text);
+        if (language === 'sql')  return hlSql(text);
+        return escHtml(text);
+    }
+
+    function activeLine() { return ta.value.substring(0, ta.selectionStart).split('\n').length; }
+
+    function updateGutter(text, line) {
+        const n = (text.match(/\n/g) || []).length + 1;
+        const frags = [];
+        for (let i = 1; i <= n; i++)
+            frags.push(i === line ? `<span class="ce-line-active">${i}</span>` : `<span>${i}</span>`);
+        gutterInner.innerHTML = frags.join('');
+    }
+
+    function syncScroll() {
+        cePre.scrollTop  = ta.scrollTop;
+        cePre.scrollLeft = ta.scrollLeft;
+        gutterInner.style.transform = `translateY(-${ta.scrollTop}px)`;
+    }
+
+    function update() {
+        const text = ta.value;
+        ceCode.innerHTML = highlight(text) + '\n';
+        updateGutter(text, activeLine());
+        syncScroll();
+    }
+
+    ta.addEventListener('input',  update);
+    ta.addEventListener('scroll', syncScroll);
+    ta.addEventListener('click',  () => updateGutter(ta.value, activeLine()));
+    ta.addEventListener('keyup',  e => {
+        if (e.key.startsWith('Arrow') || ['Home','End','PageUp','PageDown'].includes(e.key))
+            updateGutter(ta.value, activeLine());
+    });
+
+    ta.addEventListener('keydown', e => {
+        const s = ta.selectionStart, end = ta.selectionEnd, v = ta.value;
+
+        // Tab / Shift-Tab
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            if (e.shiftKey) {
+                const ls = v.lastIndexOf('\n', s - 1) + 1;
+                if (v.substring(ls, ls + 2) === '  ') {
+                    ta.value = v.substring(0, ls) + v.substring(ls + 2);
+                    ta.selectionStart = ta.selectionEnd = Math.max(ls, s - 2);
+                    update();
+                }
+            } else {
+                ta.value = v.substring(0, s) + '  ' + v.substring(end);
+                ta.selectionStart = ta.selectionEnd = s + 2;
+                update();
+            }
+            return;
+        }
+
+        // Smart Enter
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const ls     = v.lastIndexOf('\n', s - 1) + 1;
+            const indent = v.substring(ls, s).match(/^(\s*)/)[1];
+            const extra  = (v[s - 1] === '{' || v[s - 1] === '[') ? '  ' : '';
+            const ins    = '\n' + indent + extra;
+            ta.value = v.substring(0, s) + ins + v.substring(end);
+            ta.selectionStart = ta.selectionEnd = s + ins.length;
+            update();
+            return;
+        }
+
+        // Auto-close pairs  { [ (
+        const OPEN = { '{': '}', '[': ']', '(': ')' };
+        if (e.key in OPEN) {
+            e.preventDefault();
+            const sel = v.substring(s, end);
+            if (sel) {
+                ta.value = v.substring(0, s) + e.key + sel + OPEN[e.key] + v.substring(end);
+                ta.selectionStart = s + 1; ta.selectionEnd = end + 1;
+            } else {
+                ta.value = v.substring(0, s) + e.key + OPEN[e.key] + v.substring(end);
+                ta.selectionStart = ta.selectionEnd = s + 1;
+            }
+            update(); return;
+        }
+
+        // Auto-close "
+        if (e.key === '"') {
+            e.preventDefault();
+            const sel = v.substring(s, end);
+            if (sel) {
+                ta.value = v.substring(0, s) + '"' + sel + '"' + v.substring(end);
+                ta.selectionStart = s + 1; ta.selectionEnd = end + 1;
+            } else if (v[s] === '"') {
+                ta.selectionStart = ta.selectionEnd = s + 1;
+            } else {
+                ta.value = v.substring(0, s) + '""' + v.substring(end);
+                ta.selectionStart = ta.selectionEnd = s + 1;
+            }
+            update(); return;
+        }
+
+        // Skip over closing bracket if already present
+        if ((e.key === '}' || e.key === ']' || e.key === ')') && s === end && v[s] === e.key) {
+            e.preventDefault();
+            ta.selectionStart = ta.selectionEnd = s + 1;
+            update(); return;
+        }
+
+        // Backspace: remove auto-closed pair together
+        if (e.key === 'Backspace' && s === end && s > 0) {
+            const p = v[s - 1], n = v[s];
+            if ((p==='{' && n==='}') || (p==='[' && n===']') || (p==='(' && n===')') || (p==='"' && n==='"')) {
+                e.preventDefault();
+                ta.value = v.substring(0, s - 1) + v.substring(s + 1);
+                ta.selectionStart = ta.selectionEnd = s - 1;
+                update(); return;
+            }
+        }
+    });
+
+    if (value) ta.value = value;
+    update();
+
+    return {
+        getValue() { return ta.value; },
+        setValue(v) { ta.value = v; update(); },
+        focus()     { ta.focus(); },
+        getTA()     { return ta; }
+    };
+}
+
 // ===== 1. JSON Formatter =====
 ToolManager.register('json-formatter', {
     _state: null,
+    _editor: null,
     init(container) {
         container.innerHTML = `<div class="tool-content">
             <div class="tool-actions">
@@ -14,10 +224,13 @@ ToolManager.register('json-formatter', {
                 <button class="tool-btn" id="tjCopy">Copy Output</button>
             </div>
             <div class="tool-split">
-                <textarea class="tool-textarea" id="tjInput" placeholder="Paste JSON here...">${this._state || ''}</textarea>
+                <div id="tjEditorWrap"></div>
                 <div class="tool-output" id="tjOutput"></div>
             </div>
         </div>`;
+        this._editor = createCodeEditor(document.getElementById('tjEditorWrap'), {
+            language: 'json', placeholder: 'Paste JSON here...', taId: 'tjInput', value: this._state || ''
+        });
         const input = document.getElementById('tjInput');
         const output = document.getElementById('tjOutput');
         const fmt = (sp) => {
@@ -40,12 +253,11 @@ ToolManager.register('json-formatter', {
         if (this._state) fmt(2);
     },
     destroy() {},
-    saveState() { this._state = document.getElementById('tjInput')?.value || ''; },
+    saveState() { this._state = this._editor ? this._editor.getValue() : (document.getElementById('tjInput')?.value || ''); },
     loadState() { this._state = this._state || ''; },
     handleFileDrop(content) {
-        const input = document.getElementById('tjInput');
-        if (!input) return;
-        input.value = content;
+        if (!this._editor) return;
+        this._editor.setValue(content);
         try {
             const output = document.getElementById('tjOutput');
             if (output) output.innerHTML = this._highlight(JSON.stringify(JSON.parse(content), null, 2));
@@ -153,6 +365,7 @@ ToolManager.register('markdown-viewer', {
 // ===== 3. SQL Formatter =====
 ToolManager.register('sql-formatter', {
     _state: null,
+    _editor: null,
     init(container) {
         container.innerHTML = `<div class="tool-content">
             <div class="tool-actions">
@@ -170,19 +383,17 @@ ToolManager.register('sql-formatter', {
                 </select>
             </div>
             <div class="tool-split">
-                <textarea class="tool-textarea" id="tsInput" placeholder="Paste SQL here...">${this._state || ''}</textarea>
+                <div id="tsEditorWrap"></div>
                 <div class="tool-output" id="tsOutput"></div>
             </div>
         </div>`;
+        this._editor = createCodeEditor(document.getElementById('tsEditorWrap'), {
+            language: 'sql', placeholder: 'Paste SQL here...', taId: 'tsInput', value: this._state || ''
+        });
         const input = document.getElementById('tsInput');
         const output = document.getElementById('tsOutput');
-        const dialect = document.getElementById('tsDialect');
-        const loadFmt = () => loadScript('https://cdn.jsdelivr.net/npm/sql-formatter@4.0.2/dist/sql-formatter.min.js');
-        document.getElementById('tsFmt').onclick = async () => {
-            try {
-                await loadFmt();
-                output.textContent = window.sqlFormatter.format(input.value, { language: dialect.value });
-            } catch { output.textContent = this._basicFmt(input.value); }
+        document.getElementById('tsFmt').onclick = () => {
+            output.innerHTML = this._highlight(this._basicFmt(input.value));
         };
         document.getElementById('tsMin').onclick = () => {
             output.textContent = input.value.replace(/\s+/g, ' ').replace(/\s*([,;()=<>])\s*/g, '$1').trim();
@@ -209,21 +420,63 @@ ToolManager.register('sql-formatter', {
         };
     },
     destroy() {},
-    saveState() { this._state = document.getElementById('tsInput')?.value || ''; },
+    saveState() { this._state = this._editor ? this._editor.getValue() : (document.getElementById('tsInput')?.value || ''); },
     loadState() {},
     handleFileDrop(content) {
-        const input = document.getElementById('tsInput');
-        if (input) input.value = content;
+        if (this._editor) this._editor.setValue(content);
+    },
+    _highlight(sql) {
+        const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        const KW = /\b(SELECT|FROM|WHERE|AND|OR|NOT|IN|IS|NULL|JOIN|LEFT|RIGHT|INNER|OUTER|FULL|CROSS|ON|AS|GROUP|ORDER|BY|HAVING|LIMIT|OFFSET|UNION|ALL|DISTINCT|TOP|INTO|VALUES|INSERT|UPDATE|SET|DELETE|CREATE|ALTER|DROP|TABLE|VIEW|INDEX|SCHEMA|PRIMARY|KEY|FOREIGN|REFERENCES|UNIQUE|DEFAULT|CONSTRAINT|CASE|WHEN|THEN|ELSE|END|BETWEEN|LIKE|EXISTS|WITH|RECURSIVE|TRUNCATE|BEGIN|COMMIT|ROLLBACK|DECLARE|EXEC|EXECUTE|IF|ASC|DESC|COALESCE|CAST|COUNT|SUM|AVG|MIN|MAX|TRUE|FALSE)\b/gi;
+        const toks = [];
+        let i = 0;
+        while (i < sql.length) {
+            if (sql[i] === "'") {
+                let j = i + 1;
+                while (j < sql.length) {
+                    if (sql[j] === "'" && sql[j+1] === "'") { j += 2; continue; }
+                    if (sql[j] === "'") { j++; break; }
+                    j++;
+                }
+                toks.push(`<span class="sql-str">${esc(sql.slice(i, j))}</span>`); i = j;
+            } else if (sql[i] === '"') {
+                let j = i + 1;
+                while (j < sql.length && sql[j] !== '"') j++;
+                toks.push(`<span class="sql-ident">${esc(sql.slice(i, j + 1))}</span>`); i = j + 1;
+            } else if (sql[i] === '/' && sql[i+1] === '*') {
+                let j = i + 2;
+                while (j < sql.length - 1 && !(sql[j] === '*' && sql[j+1] === '/')) j++;
+                toks.push(`<span class="sql-cmt">${esc(sql.slice(i, j + 2))}</span>`); i = j + 2;
+            } else if (sql[i] === '-' && sql[i+1] === '-') {
+                let j = i + 2;
+                while (j < sql.length && sql[j] !== '\n') j++;
+                toks.push(`<span class="sql-cmt">${esc(sql.slice(i, j))}</span>`); i = j;
+            } else {
+                let j = i;
+                while (j < sql.length && sql[j] !== "'" && sql[j] !== '"' &&
+                       !(sql[j] === '/' && sql[j+1] === '*') &&
+                       !(sql[j] === '-' && sql[j+1] === '-')) j++;
+                if (j === i) j++;
+                const chunk = esc(sql.slice(i, j))
+                    .replace(/\b(\d+(?:\.\d*)?)\b/g, '<span class="sql-num">$1</span>')
+                    .replace(KW, '<span class="sql-kw">$1</span>');
+                toks.push(chunk); i = j;
+            }
+        }
+        return toks.join('');
     },
     _basicFmt(sql) {
-        const keywords = ['SELECT','FROM','WHERE','AND','OR','JOIN','LEFT','RIGHT','INNER','OUTER','ON','GROUP BY','ORDER BY','HAVING','INSERT','UPDATE','DELETE','SET','VALUES','INTO','CREATE','ALTER','DROP','TABLE','INDEX','VIEW','UNION','ALL','DISTINCT','AS','IN','NOT','NULL','IS','BETWEEN','LIKE','EXISTS','CASE','WHEN','THEN','ELSE','END','LIMIT','OFFSET','WITH'];
-        let result = sql;
-        keywords.forEach(kw => {
-            result = result.replace(new RegExp(`\\b${kw}\\b`, 'gi'), '\n' + kw);
-        });
+        const NEWLINE_BEFORE = /\b(SELECT|FROM|WHERE|JOIN|LEFT\s+(?:OUTER\s+)?JOIN|RIGHT\s+(?:OUTER\s+)?JOIN|INNER\s+JOIN|FULL\s+(?:OUTER\s+)?JOIN|CROSS\s+JOIN|ON|GROUP\s+BY|ORDER\s+BY|HAVING|UNION(?:\s+ALL)?|INSERT\s+INTO|UPDATE|SET|DELETE\s+FROM|VALUES|LIMIT|OFFSET|WITH)\b/gi;
+        const INDENT_AFTER = /\b(SELECT|WHERE|SET|VALUES)\b/gi;
+        let result = sql
+            .replace(/\s+/g, ' ')
+            .trim()
+            .replace(NEWLINE_BEFORE, '\n$1')
+            .replace(INDENT_AFTER, m => m + '\n    ');
         return result.trim();
     }
 });
+
 
 // ===== 4. Text Formatter =====
 ToolManager.register('text-formatter', {

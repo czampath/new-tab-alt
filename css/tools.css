@@ -872,3 +872,136 @@ body.light-theme .tool-label-input:focus {
     .notes-sidebar { width: 100%; border-right: none; border-bottom: 1px solid rgba(255,255,255,0.14); padding-right: 0; padding-bottom: 8px; flex-direction: row; overflow-x: auto; }
     .tool-viewport-header { padding: 10px 14px; }
 }
+
+/* ===== In-house Code Editor ===== */
+.tool-split > .ce-wrap { flex-direction: row; }
+
+.ce-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: row;
+    border: 1px solid rgba(255,255,255,0.16);
+    border-radius: 10px;
+    background: rgba(0,0,0,0.3);
+    overflow: hidden;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 13.5px;
+    line-height: 1.5;
+    min-height: 0;
+    transition: border-color 0.2s;
+}
+.ce-wrap:focus-within { border-color: rgba(102,126,234,0.4); }
+
+.ce-gutter {
+    flex-shrink: 0;
+    width: 46px;
+    background: rgba(0,0,0,0.18);
+    border-right: 1px solid rgba(255,255,255,0.07);
+    user-select: none;
+    position: relative;
+    overflow: hidden;
+}
+.ce-gutter-inner {
+    position: absolute;
+    top: 0; right: 0;
+    padding: 14px 8px 14px 4px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    will-change: transform;
+}
+.ce-gutter-inner span {
+    display: block;
+    font-size: 12px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    line-height: 1.5;
+    color: rgba(255,255,255,0.2);
+    white-space: nowrap;
+    min-height: 20.25px;
+}
+.ce-gutter-inner span.ce-line-active { color: rgba(255,255,255,0.65); }
+
+.ce-body {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    min-width: 0;
+}
+
+.ce-highlight,
+.ce-ta {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 14px;
+    box-sizing: border-box;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 13.5px;
+    line-height: 1.5;
+    tab-size: 4;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    overflow: scroll;
+}
+
+.ce-highlight {
+    pointer-events: none;
+    color: #e0e0e0;
+    background: transparent;
+    border: none;
+    outline: none;
+    /* Reserve same scrollbar space as .ce-ta so text wraps identically */
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+}
+.ce-highlight::-webkit-scrollbar { width: 6px; height: 6px; }
+.ce-highlight::-webkit-scrollbar-thumb { background: transparent; }
+
+.ce-ta {
+    background: transparent;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    caret-color: #c8c8c8;
+    border: none;
+    outline: none;
+    resize: none;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.15) transparent;
+}
+.ce-ta::-webkit-scrollbar { width: 6px; height: 6px; }
+.ce-ta::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+.ce-ta::placeholder { color: rgba(255,255,255,0.25); -webkit-text-fill-color: rgba(255,255,255,0.25); }
+.ce-ta::selection { background: rgba(100,120,230,0.4); }
+
+/* SQL syntax colors */
+.sql-kw    { color: #569cd6; }
+.sql-str   { color: #ce9178; }
+.sql-num   { color: #b5cea8; }
+.sql-cmt   { color: #6a9955; font-style: italic; }
+.sql-ident { color: #9cdcfe; }
+
+/* light theme */
+body.light-theme .ce-wrap { border-color: rgba(0,0,0,0.14); background: rgba(255,255,255,0.8); }
+body.light-theme .ce-wrap:focus-within { border-color: rgba(102,126,234,0.5); }
+body.light-theme .ce-gutter { background: rgba(0,0,0,0.03); border-right-color: rgba(0,0,0,0.08); }
+body.light-theme .ce-gutter-inner span { color: rgba(0,0,0,0.25); }
+body.light-theme .ce-gutter-inner span.ce-line-active { color: rgba(0,0,0,0.6); }
+body.light-theme .ce-highlight { color: #1e1e1e; }
+body.light-theme .ce-ta { caret-color: #1e1e1e; scrollbar-color: rgba(0,0,0,0.15) transparent; }
+body.light-theme .ce-ta::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); }
+body.light-theme .ce-ta::selection { background: rgba(100,120,230,0.25); }
+/* light JSON */
+body.light-theme .json-key    { color: #0451a5; }
+body.light-theme .json-string { color: #008000; }
+body.light-theme .json-number { color: #b07000; }
+body.light-theme .json-bool   { color: #0000ff; }
+body.light-theme .json-null   { color: #666; }
+/* light SQL */
+body.light-theme .sql-kw    { color: #0000ff; }
+body.light-theme .sql-str   { color: #a31515; }
+body.light-theme .sql-num   { color: #098658; }
+body.light-theme .sql-cmt   { color: #008000; }
+body.light-theme .sql-ident { color: #001080; }
