@@ -42,6 +42,15 @@ ToolManager.register('json-formatter', {
     destroy() {},
     saveState() { this._state = document.getElementById('tjInput')?.value || ''; },
     loadState() { this._state = this._state || ''; },
+    handleFileDrop(content) {
+        const input = document.getElementById('tjInput');
+        if (!input) return;
+        input.value = content;
+        try {
+            const output = document.getElementById('tjOutput');
+            if (output) output.innerHTML = this._highlight(JSON.stringify(JSON.parse(content), null, 2));
+        } catch {}
+    },
     _highlight(json) {
         return json.replace(/("(\\u[\da-fA-F]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, (m) => {
             let cls = 'json-number';
@@ -119,6 +128,12 @@ ToolManager.register('markdown-viewer', {
     },
     saveState() { this._state = document.getElementById('tmInput')?.value || ''; },
     loadState() {},
+    handleFileDrop(content) {
+        const input = document.getElementById('tmInput');
+        if (!input) return;
+        input.value = content;
+        input.dispatchEvent(new Event('input'));
+    },
     _basicMd(md) {
         let html = md
             .replace(/^### (.+)$/gm, '<h3>$1</h3>')
@@ -196,6 +211,10 @@ ToolManager.register('sql-formatter', {
     destroy() {},
     saveState() { this._state = document.getElementById('tsInput')?.value || ''; },
     loadState() {},
+    handleFileDrop(content) {
+        const input = document.getElementById('tsInput');
+        if (input) input.value = content;
+    },
     _basicFmt(sql) {
         const keywords = ['SELECT','FROM','WHERE','AND','OR','JOIN','LEFT','RIGHT','INNER','OUTER','ON','GROUP BY','ORDER BY','HAVING','INSERT','UPDATE','DELETE','SET','VALUES','INTO','CREATE','ALTER','DROP','TABLE','INDEX','VIEW','UNION','ALL','DISTINCT','AS','IN','NOT','NULL','IS','BETWEEN','LIKE','EXISTS','CASE','WHEN','THEN','ELSE','END','LIMIT','OFFSET','WITH'];
         let result = sql;
@@ -257,7 +276,13 @@ ToolManager.register('text-formatter', {
     },
     destroy() {},
     saveState() { this._state = document.getElementById('ttInput')?.value || ''; },
-    loadState() {}
+    loadState() {},
+    handleFileDrop(content) {
+        const input = document.getElementById('ttInput');
+        if (!input) return;
+        input.value = content;
+        input.dispatchEvent(new Event('input'));
+    }
 });
 
 // ===== 5. Regex Tester =====
@@ -345,6 +370,12 @@ ToolManager.register('regex-tester', {
         };
     },
     loadState() {},
+    handleFileDrop(content) {
+        const input = document.getElementById('trInput');
+        if (!input) return;
+        input.value = content;
+        input.dispatchEvent(new Event('input'));
+    },
     _esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 });
 
@@ -462,6 +493,20 @@ ToolManager.register('diff-viewer', {
         };
     },
     loadState() {},
+    handleFileDrop(content, filename) {
+        const left = document.getElementById('tdLeft');
+        const right = document.getElementById('tdRight');
+        if (!left || !right) return;
+        if (!left.value) {
+            left.value = content;
+            const ll = document.getElementById('tdLeftLabel');
+            if (ll && filename) ll.value = filename;
+        } else {
+            right.value = content;
+            const rl = document.getElementById('tdRightLabel');
+            if (rl && filename) rl.value = filename;
+        }
+    },
     _esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 });
 
@@ -811,6 +856,10 @@ ToolManager.register('uuid-hash', {
     destroy() {},
     saveState() {},
     loadState() {},
+    handleFileDrop(content) {
+        const input = document.getElementById('tuText');
+        if (input) input.value = content;
+    },
     _uuidv4() {
         const a = new Uint8Array(16);
         crypto.getRandomValues(a);
@@ -910,6 +959,15 @@ ToolManager.register('notes', {
     destroy() { clearTimeout(this._saveTimer); },
     saveState() { if (this._saveCurrentNote) this._saveCurrentNote(); },
     loadState() {},
+    handleFileDrop(content, filename) {
+        const titleEl = document.getElementById('tnTitle');
+        const contentEl = document.getElementById('tnContent');
+        if (!titleEl || !contentEl) return;
+        titleEl.value = filename ? filename.replace(/\.[^.]+$/, '') : 'Dropped Note';
+        contentEl.value = content;
+        titleEl.dispatchEvent(new Event('input'));
+        contentEl.dispatchEvent(new Event('input'));
+    },
     _esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 });
 

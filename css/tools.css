@@ -227,6 +227,25 @@ body.light-theme .tool-strip-item::after {
     min-height: 0;
 }
 
+/* ===== File drop overlay ===== */
+.tool-viewport.drop-over::after {
+    content: 'Drop file to load';
+    position: absolute;
+    inset: 0;
+    background: rgba(102, 126, 234, 0.13);
+    border: 2px dashed rgba(102, 126, 234, 0.6);
+    border-radius: 0;
+    display: grid;
+    place-items: center;
+    font-size: 18px;
+    font-family: 'Inter', 'Roboto', sans-serif;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.75);
+    letter-spacing: -0.01em;
+    z-index: 20;
+    pointer-events: none;
+}
+
 /* ===== Tool Tab Bar ===== */
 .tool-tab-bar {
     display: flex;

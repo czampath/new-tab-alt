@@ -81,6 +81,13 @@ const TabManager = {
         const data = this.load(id);
         const idx = data.tabs.findIndex(t => t.id === tabId);
         if (idx === -1) return;
+        // Check for unsaved content before closing
+        const tab = data.tabs[idx];
+        let stateToCheck = tab.state;
+        if (data.active === tabId && ToolManager.activeToolId === id) {
+            stateToCheck = this.captureState(id);
+        }
+        if (this._hasContent(stateToCheck) && !confirm('Close this tab? The content will be lost.')) return;
         const wasActive = data.active === tabId;
         data.tabs.splice(idx, 1);
         if (data.tabs.length === 0) {
@@ -404,6 +411,62 @@ document.addEventListener('DOMContentLoaded', () => {
         const vp = document.getElementById('toolViewport');
         vp.classList.toggle('fullwidth');
         expandBtn.textContent = vp.classList.contains('fullwidth') ? '⊟' : '⛶';
+    });
+
+    // ===== File drag-and-drop into tool viewport =====
+    const viewport = document.getElementById('toolViewport');
+    let _dropDragCounter = 0;
+    viewport.addEventListener('dragenter', (e) => {
+        if (!e.dataTransfer.types.includes('Files')) return;
+        e.preventDefault();
+        _dropDragCounter++;
+        const handler = ToolManager.activeToolId && ToolManager.registry[ToolManager.activeToolId];
+        if (handler && typeof handler.handleFileDrop === 'function') {
+            viewport.classList.add('drop-over');
+        }
+    });
+    viewport.addEventListener('dragover', (e) => {
+        if (!e.dataTransfer.types.includes('Files')) return;
+        e.preventDefault();
+        const handler = ToolManager.activeToolId && ToolManager.registry[ToolManager.activeToolId];
+        if (handler && typeof handler.handleFileDrop === 'function') {
+            e.dataTransfer.dropEffect = 'copy';
+        }
+    });
+    viewport.addEventListener('dragleave', (e) => {
+        _dropDragCounter--;
+        if (_dropDragCounter <= 0) {
+            _dropDragCounter = 0;
+            viewport.classList.remove('drop-over');
+        }
+    });
+    viewport.addEventListener('drop', (e) => {
+        e.preventDefault();
+        _dropDragCounter = 0;
+        viewport.classList.remove('drop-over');
+        const handler = ToolManager.activeToolId && ToolManager.registry[ToolManager.activeToolId];
+        if (!handler || typeof handler.handleFileDrop !== 'function') return;
+        Array.from(e.dataTransfer.files).forEach(file => {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const id = ToolManager.activeToolId;
+                const h = id && ToolManager.registry[id];
+                if (!h || typeof h.handleFileDrop !== 'function') return;
+                // For tabbed tools: open in a new tab if current tab already has content
+                if (TabManager.isTabbed(id)) {
+                    const currentState = TabManager.captureState(id);
+                    if (TabManager._hasContent(currentState)) {
+                        TabManager.createTab(id);
+                    }
+                }
+                // Re-resolve handler after possible tab switch
+                const activeHandler = ToolManager.registry[ToolManager.activeToolId];
+                if (activeHandler && typeof activeHandler.handleFileDrop === 'function') {
+                    activeHandler.handleFileDrop(ev.target.result, file.name);
+                }
+            };
+            reader.readAsText(file);
+        });
     });
 
     // ESC to close tool viewport
