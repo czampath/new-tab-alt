@@ -355,17 +355,22 @@ body.light-theme .add-btn:hover {
     animation: popIn 0.65s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
-.bookmark:nth-child(1) { animation-delay: 0.67s; }
-.bookmark:nth-child(2) { animation-delay: 0.74s; }
-.bookmark:nth-child(3) { animation-delay: 0.81s; }
-.bookmark:nth-child(4) { animation-delay: 0.88s; }
-.bookmark:nth-child(5) { animation-delay: 0.95s; }
-.bookmark:nth-child(6) { animation-delay: 1.02s; }
-.bookmark:nth-child(7) { animation-delay: 1.09s; }
-.bookmark:nth-child(8) { animation-delay: 1.16s; }
-.bookmark:nth-child(9) { animation-delay: 1.23s; }
-.bookmark:nth-child(10) { animation-delay: 1.30s; }
-.bookmark:nth-child(n+11) { animation-delay: 1.37s; }
+.bookmark:nth-child(1)  { animation-delay: 0.30s; }
+.bookmark:nth-child(2)  { animation-delay: 0.34s; }
+.bookmark:nth-child(3)  { animation-delay: 0.38s; }
+.bookmark:nth-child(4)  { animation-delay: 0.42s; }
+.bookmark:nth-child(5)  { animation-delay: 0.46s; }
+.bookmark:nth-child(6)  { animation-delay: 0.50s; }
+.bookmark:nth-child(7)  { animation-delay: 0.54s; }
+.bookmark:nth-child(8)  { animation-delay: 0.58s; }
+.bookmark:nth-child(9)  { animation-delay: 0.62s; }
+.bookmark:nth-child(10) { animation-delay: 0.66s; }
+.bookmark:nth-child(11) { animation-delay: 0.70s; }
+.bookmark:nth-child(12) { animation-delay: 0.74s; }
+.bookmark:nth-child(13) { animation-delay: 0.78s; }
+.bookmark:nth-child(14) { animation-delay: 0.82s; }
+.bookmark:nth-child(15) { animation-delay: 0.86s; }
+.bookmark:nth-child(n+16) { animation-delay: 0.86s; }
 
 .bookmark:hover {
     background: rgba(255, 255, 255, 0.25);
@@ -708,6 +713,21 @@ input:checked + .toggle-slider:before {
     width: 32px;
     height: 32px;
     border-radius: 7px;
+}
+
+.bookmark-letter-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    font-size: 30px !important;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    margin: 0 auto 10px;
+    font-family: 'Inter', sans-serif;
 }
 
 .hidden {

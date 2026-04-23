@@ -18,6 +18,20 @@ const defaultBookmarks = [
 // Load bookmarks from localStorage or use defaults
 let bookmarks = JSON.parse(localStorage.getItem('bookmarks')) || defaultBookmarks;
 
+// One-time migration: cache icon hue+letter on any bookmark that doesn't have it yet
+(function migrateBookmarkIcons() {
+    let dirty = false;
+    bookmarks.forEach(b => {
+        if (b.iconHue === undefined) {
+            const mp = getMainPart(b.url);
+            b.iconHue = getLetterIconHue(mp);
+            b.iconLetter = (mp.replace(/[^a-z]/gi, '')[0] || '?').toUpperCase();
+            dirty = true;
+        }
+    });
+    if (dirty) localStorage.setItem('bookmarks', JSON.stringify(bookmarks));
+})();
+
 // Load settings from localStorage
 let settings = JSON.parse(localStorage.getItem('settings')) || {
     background: 'linear-gradient(135deg, #30cfd0 0%, #330867 100%)',
@@ -25,6 +39,7 @@ let settings = JSON.parse(localStorage.getItem('settings')) || {
     showBookmarks: true,
     showSearch: true,
     showWeather: true,
+    showFavicons: false,
     weatherLat: '',
     weatherLon: '',
     weatherApiKey: ''
@@ -59,6 +74,46 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// Extract the "main part" of a URL's hostname
+// e.g. www.google.com → google, www.test.mysite.com → mysite, www.role.casper.co.nz → casper
+function getMainPart(url) {
+    try {
+        const hostname = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+        const parts = hostname.split('.');
+        if (parts.length >= 3) {
+            const last = parts[parts.length - 1];
+            const secondLast = parts[parts.length - 2];
+            const genericSLD = ['co', 'com', 'net', 'org', 'gov', 'edu', 'ac'];
+            if (last.length === 2 && genericSLD.includes(secondLast)) {
+                return parts[parts.length - 3] || parts[0];
+            }
+        }
+        return parts.length >= 2 ? parts[parts.length - 2] : parts[0];
+    } catch {
+        return url[0] || '?';
+    }
+}
+
+// Compute a hue (0-360) for a main-part string.
+// First letter: a=0, z=255 on a 0-255 spectrum.
+// Remaining letters shift within that letter's slot.
+function getLetterIconHue(mainPart) {
+    const s = mainPart.toLowerCase().replace(/[^a-z]/g, '');
+    if (!s) return 200;
+    const firstIdx = s.charCodeAt(0) - 97; // 0-25
+    const baseValue = (firstIdx / 25) * 255;
+    let shiftValue = 0;
+    if (s.length > 1) {
+        const rest = s.slice(1);
+        let sum = 0;
+        for (const c of rest) sum += c.charCodeAt(0) - 97;
+        const normalized = sum / (rest.length * 25);
+        shiftValue = normalized * (255 / 26);
+    }
+    const finalValue = (baseValue + shiftValue) % 256;
+    return Math.round((finalValue / 255) * 360);
 }
 
 // Function to get favicon URL (only sends root domain, never the full URL)
@@ -208,14 +263,19 @@ function renderBookmarks() {
         // Create icon with image
         const iconSpan = document.createElement('span');
         iconSpan.className = 'bookmark-icon';
-        const img = document.createElement('img');
-        const faviconUrl = getFaviconUrl(bookmark.url);
-        img.src = faviconUrl;
-        img.alt = bookmark.title;
-        img.onerror = function() {
-            this.parentElement.textContent = '🌐';
-        };
-        iconSpan.appendChild(img);
+        if (settings.showFavicons) {
+            const img = document.createElement('img');
+            img.src = getFaviconUrl(bookmark.url);
+            img.alt = bookmark.title;
+            img.onerror = function() {
+                this.parentElement.textContent = '🌐';
+            };
+            iconSpan.appendChild(img);
+        } else {
+            iconSpan.classList.add('bookmark-letter-icon');
+            iconSpan.style.background = `hsl(${bookmark.iconHue}, 60%, 42%)`;
+            iconSpan.textContent = bookmark.iconLetter;
+        }
         
         // Create title (using textContent to prevent XSS)
         const titleDiv = document.createElement('div');
@@ -310,11 +370,14 @@ saveBtn.addEventListener('click', () => {
             return;
         }
         
+        const mainPart = getMainPart(sanitized);
+        const iconHue = getLetterIconHue(mainPart);
+        const iconLetter = (mainPart.replace(/[^a-z]/gi, '')[0] || '?').toUpperCase();
         if (editingIndex >= 0) {
-            bookmarks[editingIndex] = { title, url: sanitized };
+            bookmarks[editingIndex] = { title, url: sanitized, iconHue, iconLetter };
             editingIndex = -1;
         } else {
-            bookmarks.push({ title, url: sanitized });
+            bookmarks.push({ title, url: sanitized, iconHue, iconLetter });
         }
         localStorage.setItem('bookmarks', JSON.stringify(bookmarks));
         renderBookmarks();
@@ -471,6 +534,7 @@ function applySettings() {
     toggleBookmarks.checked = settings.showBookmarks;
     toggleSearch.checked = settings.showSearch;
     document.getElementById('toggleWeather').checked = settings.showWeather;
+    document.getElementById('toggleFavicons').checked = !!settings.showFavicons;
     document.getElementById('weatherApiKey').value = settings.weatherApiKey || '';
     document.getElementById('weatherLat').value = settings.weatherLat || '';
     document.getElementById('weatherLon').value = settings.weatherLon || '';
@@ -553,6 +617,13 @@ toggleBookmarks.addEventListener('change', () => {
     settings.showBookmarks = toggleBookmarks.checked;
     localStorage.setItem('settings', JSON.stringify(settings));
     bookmarksSection.style.display = settings.showBookmarks ? 'block' : 'none';
+});
+
+const toggleFavicons = document.getElementById('toggleFavicons');
+toggleFavicons.addEventListener('change', () => {
+    settings.showFavicons = toggleFavicons.checked;
+    localStorage.setItem('settings', JSON.stringify(settings));
+    renderBookmarks();
 });
 
 toggleSearch.addEventListener('change', () => {
