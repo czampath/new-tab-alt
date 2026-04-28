@@ -515,15 +515,314 @@ ToolManager.register('sql-formatter', {
         }
         return toks.join('');
     },
-    _basicFmt(sql) {
-        const NEWLINE_BEFORE = /\b(SELECT|FROM|WHERE|JOIN|LEFT\s+(?:OUTER\s+)?JOIN|RIGHT\s+(?:OUTER\s+)?JOIN|INNER\s+JOIN|FULL\s+(?:OUTER\s+)?JOIN|CROSS\s+JOIN|ON|GROUP\s+BY|ORDER\s+BY|HAVING|UNION(?:\s+ALL)?|INSERT\s+INTO|UPDATE|SET|DELETE\s+FROM|VALUES|LIMIT|OFFSET|WITH)\b/gi;
-        const INDENT_AFTER = /\b(SELECT|WHERE|SET|VALUES)\b/gi;
-        let result = sql
-            .replace(/\s+/g, ' ')
-            .trim()
-            .replace(NEWLINE_BEFORE, '\n$1')
-            .replace(INDENT_AFTER, m => m + '\n    ');
-        return result.trim();
+    _basicFmt(rawSql) {
+        // ── tokenise preserving strings/comments ──────────────────────────────
+        function tokenise(src) {
+            const toks = []; let i = 0;
+            while (i < src.length) {
+                if (src[i] === "'" || src[i] === '`') {
+                    const q = src[i]; let j = i + 1;
+                    while (j < src.length) {
+                        if (src[j] === q && src[j+1] === q) { j += 2; continue; }
+                        if (src[j] === q) { j++; break; }
+                        j++;
+                    }
+                    toks.push({ t: 'lit', v: src.slice(i, j) }); i = j;
+                } else if (src[i] === '"') {
+                    let j = i + 1;
+                    while (j < src.length && src[j] !== '"') j++;
+                    toks.push({ t: 'lit', v: src.slice(i, j + 1) }); i = j + 1;
+                } else if (src[i] === '/' && src[i+1] === '*') {
+                    let j = i + 2;
+                    while (j < src.length - 1 && !(src[j] === '*' && src[j+1] === '/')) j++;
+                    toks.push({ t: 'cmt', v: src.slice(i, j + 2) }); i = j + 2;
+                } else if (src[i] === '-' && src[i+1] === '-') {
+                    let j = i + 2;
+                    while (j < src.length && src[j] !== '\n') j++;
+                    toks.push({ t: 'cmt', v: src.slice(i, j) }); i = j;
+                } else if (src[i] === '(') {
+                    // find matching closing paren, respecting nesting & literals
+                    const sub = []; let depth = 1, j = i + 1;
+                    while (j < src.length && depth > 0) {
+                        if (src[j] === "'" || src[j] === '`') {
+                            const q = src[j]; let k = j + 1;
+                            while (k < src.length) {
+                                if (src[k] === q && src[k+1] === q) { k += 2; continue; }
+                                if (src[k] === q) { k++; break; }
+                                k++;
+                            }
+                            sub.push(src.slice(j, k)); j = k;
+                        } else if (src[j] === '"') {
+                            let k = j + 1;
+                            while (k < src.length && src[k] !== '"') k++;
+                            sub.push(src.slice(j, k + 1)); j = k + 1;
+                        } else {
+                            if (src[j] === '(') depth++;
+                            else if (src[j] === ')') { depth--; if (depth === 0) { j++; break; } }
+                            sub.push(src[j]); j++;
+                        }
+                    }
+                    toks.push({ t: 'paren', v: sub.join('') }); i = j;
+                } else {
+                    let j = i;
+                    while (j < src.length && src[j] !== "'" && src[j] !== '"' && src[j] !== '`' &&
+                           src[j] !== '(' &&
+                           !(src[j] === '/' && src[j+1] === '*') &&
+                           !(src[j] === '-' && src[j+1] === '-')) j++;
+                    if (j === i) j++;
+                    toks.push({ t: 'code', v: src.slice(i, j) }); i = j;
+                }
+            }
+            return toks;
+        }
+
+        // ── reconstruct flat text, replacing (…) with placeholders ───────────
+        function flatten(src) {
+            const store = [];
+            const toks = tokenise(src);
+            let out = '';
+            for (const tok of toks) {
+                if (tok.t === 'paren') {
+                    const ph = `\x00P${store.length}\x00`;
+                    store.push(tok.v);
+                    out += ph;
+                } else {
+                    out += tok.v;
+                }
+            }
+            return { flat: out, store };
+        }
+
+        // ── split a comma list respecting placeholders (no commas inside) ─────
+        function splitComma(s) {
+            return s.split(',').map(x => x.trim()).filter(Boolean);
+        }
+
+        // ── align AS aliases in a column list ─────────────────────────────────
+        function fmtColList(cols, indent) {
+            // parse each col: expr [AS alias]
+            const parsed = cols.map(col => {
+                const m = col.match(/^(.*?)\s+AS\s+(\S+)\s*$/i);
+                if (m) return { expr: m[1].trim(), alias: m[2] };
+                return { expr: col.trim(), alias: '' };
+            });
+            const maxExpr = Math.max(...parsed.map(p => p.expr.length));
+            return parsed.map((p, idx) => {
+                const comma = idx < parsed.length - 1 ? ', ' : ' ';
+                if (p.alias) {
+                    const pad = ' '.repeat(Math.max(1, maxExpr - p.expr.length + 1));
+                    return indent + p.expr + pad + 'AS ' + p.alias + comma;
+                }
+                return indent + p.expr + comma;
+            }).join('\n');
+        }
+
+        // ── format a JOIN … ON block ───────────────────────────────────────────
+        function fmtJoin(joinKw, table, onExpr, baseIndent) {
+            const joinLine = baseIndent + '       ' + joinKw + ' ' + table;
+            const onParts = onExpr ? onExpr.split(/\bAND\b/i) : [];
+            if (onParts.length > 1) {
+                return joinLine + '\n' +
+                    baseIndent + '         ON ( ' + onParts[0].trim() + '\n' +
+                    onParts.slice(1).map(p => baseIndent + '              AND ' + p.trim()).join('\n') + ' )';
+            } else if (onParts.length === 1) {
+                return joinLine + '\n' + baseIndent + '         ON ' + onParts[0].trim();
+            }
+            return joinLine;
+        }
+
+        // ── main formatter (recursive for sub-queries) ─────────────────────────
+        function fmt(src, depth) {
+            const ind = '       '.repeat(depth); // 7 spaces per depth level (inside parens)
+            const colInd = ind + '       ';       // column indent
+
+            const { flat, store } = flatten(src.trim());
+
+            // restore a placeholder (possibly recursively formatting subquery)
+            function restore(s) {
+                return restoreInline(s);
+            }
+
+            // add spaces around operators in a code fragment
+            function spaceOps(s) {
+                return s.replace(/\s*(>=|<=|<>|!=|=|>|<)\s*/g, ' $1 ').replace(/\s{2,}/g, ' ');
+            }
+
+            // restore a placeholder inline (no subquery expansion)
+            function restoreInline(s) {
+                return s.replace(/\x00P(\d+)\x00/g, (_, idx) => {
+                    const inner = store[+idx];
+                    if (/^\s*SELECT\b/i.test(inner)) {
+                        const innerFmt = fmt(inner, depth + 1);
+                        const subInd = ind + '       ';
+                        return '(' + '\n' + innerFmt.split('\n').map(l => subInd + l).join('\n') + ')';
+                    }
+                    return '(' + spaceOps(inner) + ')';
+                });
+            }
+
+            // normalise whitespace in flat text
+            const norm = flat.replace(/\s+/g, ' ').trim();
+
+            // ── tokenise top-level clauses ─────────────────────────────────────
+            // Split on major keywords, keeping the keyword with next part
+            const clauseRe = /\b(SELECT\s+(?:DISTINCT\s+)?|FROM\s+|(?:(?:LEFT|RIGHT|FULL)\s+(?:OUTER\s+)?)?(?:INNER\s+)?(?:CROSS\s+)?JOIN\s+|ON\s+|WHERE\s+|AND\s+|OR\s+|GROUP\s+BY\s+|ORDER\s+BY\s+|HAVING\s+|LIMIT\s+|OFFSET\s+|UNION(?:\s+ALL)?\s+|INSERT\s+INTO\s+|UPDATE\s+|SET\s+|DELETE\s+(?:FROM\s+)?|VALUES\s+|WITH\s+)/gi;
+
+            // Extract clauses as [{kw, body}]
+            const clauses = [];
+            let lastIdx = 0, lastKw = '', m;
+            const re = new RegExp(clauseRe.source, 'gi');
+            re.lastIndex = 0;
+            while ((m = re.exec(norm)) !== null) {
+                if (lastKw || m.index > 0) {
+                    clauses.push({ kw: lastKw, body: norm.slice(lastIdx, m.index).trim() });
+                }
+                lastKw = m[1].replace(/\s+/g, ' ').toUpperCase().trimEnd();
+                lastIdx = m.index + m[1].length;
+            }
+            clauses.push({ kw: lastKw, body: norm.slice(lastIdx).trim() });
+
+            // ── build output lines ─────────────────────────────────────────────
+            const lines = [];
+            const joinBuffer = []; // accumulate JOIN/ON pairs
+
+            function flushJoins() {
+                for (const j of joinBuffer) lines.push(j);
+                joinBuffer.length = 0;
+            }
+
+            let pendingJoinKw = null, pendingJoinTable = null;
+
+            for (const { kw, body } of clauses) {
+                if (!kw && !body) continue;
+
+                const kwU = kw.trimEnd();
+                const bodyR = spaceOps(restore(body));
+
+                if (kwU === 'SELECT' || kwU === 'SELECT DISTINCT') {
+                    const cols = splitComma(body);
+                    const fmtCols = cols.map(c => spaceOps(restore(c)));
+                    // align AS
+                    const parsed = fmtCols.map(col => {
+                        const ma = col.match(/^(.*?)\s+AS\s+(\S+)\s*$/i);
+                        if (ma) return { expr: ma[1].trim(), alias: ma[2] };
+                        return { expr: col.trim(), alias: '' };
+                    });
+                    const maxE = Math.max(...parsed.map(p => p.expr.length));
+                    const colLines = parsed.map((p, idx) => {
+                        const comma = idx < parsed.length - 1 ? ', ' : ' ';
+                        if (p.alias) {
+                            const pad = ' '.repeat(Math.max(1, maxE - p.expr.length + 1));
+                            return colInd + p.expr + pad + 'AS ' + p.alias + comma;
+                        }
+                        return colInd + p.expr + comma;
+                    });
+                    lines.push(ind + kwU.padEnd(6) + ' ' + colLines[0].trimStart());
+                    for (let ci = 1; ci < colLines.length; ci++) lines.push(colLines[ci]);
+
+                } else if (kwU === 'FROM') {
+                    flushJoins();
+                    lines.push(ind + 'FROM   ' + bodyR);
+
+                } else if (/^(?:(?:LEFT|RIGHT|FULL|INNER|CROSS|NATURAL|LEFT OUTER|RIGHT OUTER|FULL OUTER)\s+)?JOIN$/.test(kwU)) {
+                    if (pendingJoinKw) {
+                        // flush previous join with no ON
+                        joinBuffer.push(ind + '       ' + pendingJoinKw + ' ' + pendingJoinTable);
+                        pendingJoinKw = null; pendingJoinTable = null;
+                    }
+                    pendingJoinKw = kwU;
+                    pendingJoinTable = bodyR;
+
+                } else if (kwU === 'ON') {
+                    if (pendingJoinKw) {
+                        joinBuffer.push(ind + '       ' + pendingJoinKw + ' ' + pendingJoinTable);
+                        pendingJoinKw = null; pendingJoinTable = null;
+                    }
+                    // body may be a single paren placeholder — unwrap it for AND splitting
+                    let onBody = body.trim();
+                    const parenMatch = onBody.match(/^\x00P(\d+)\x00$/);
+                    const onInner = parenMatch ? store[+parenMatch[1]] : onBody;
+                    const onParts = spaceOps(onInner).split(/\bAND\b/i).map(s => s.trim());
+                    const wrapped = parenMatch;
+                    if (onParts.length > 1) {
+                        joinBuffer.push(ind + '         ON ' + (wrapped ? '( ' : '') + onParts[0]);
+                        for (let oi = 1; oi < onParts.length - 1; oi++)
+                            joinBuffer.push(ind + '              AND ' + onParts[oi]);
+                        joinBuffer.push(ind + '              AND ' + onParts[onParts.length-1] + (wrapped ? ' )' : ''));
+                    } else {
+                        joinBuffer.push(ind + '         ON ' + (wrapped ? '( ' + spaceOps(onInner) + ' )' : bodyR));
+                    }
+
+                } else if (kwU === 'WHERE') {
+                    flushJoins();
+                    if (pendingJoinKw) { lines.push(ind + '       ' + pendingJoinKw + ' ' + pendingJoinTable); pendingJoinKw = null; pendingJoinTable = null; }
+                    // body may be a single paren — unwrap and split AND/OR
+                    let whereBody = body.trim();
+                    const wParenMatch = whereBody.match(/^\x00P(\d+)\x00$/);
+                    if (wParenMatch) {
+                        const wInner = spaceOps(store[+wParenMatch[1]]);
+                        const wParts = wInner.split(/\b(AND|OR)\b/i);
+                        if (wParts.length > 1) {
+                            lines.push(ind + 'WHERE  ( ' + wParts[0].trim());
+                            for (let wi = 1; wi < wParts.length; wi += 2) {
+                                const nextPart = wParts[wi + 1] ? wParts[wi + 1].trim() : '';
+                                const isLast = wi + 2 >= wParts.length;
+                                lines.push(ind + '          ' + wParts[wi].toUpperCase() + ' ' + nextPart + (isLast ? ' )' : ''));
+                            }
+                        } else {
+                            lines.push(ind + 'WHERE  ( ' + wInner.trim() + ' )');
+                        }
+                    } else {
+                        lines.push(ind + 'WHERE  ' + bodyR);
+                    }
+
+                } else if (kwU === 'AND') {
+                    lines.push(ind + '        AND ' + bodyR);
+
+                } else if (kwU === 'OR') {
+                    lines.push(ind + '         OR ' + bodyR);
+
+                } else if (kwU === 'GROUP BY') {
+                    flushJoins();
+                    lines.push(ind + 'GROUP  BY ' + bodyR);
+
+                } else if (kwU === 'ORDER BY') {
+                    flushJoins();
+                    lines.push(ind + 'ORDER  BY ' + bodyR);
+
+                } else if (kwU === 'HAVING') {
+                    lines.push(ind + 'HAVING ' + bodyR);
+
+                } else if (kwU === 'LIMIT') {
+                    lines.push(ind + 'LIMIT  ' + bodyR);
+
+                } else if (kwU === 'OFFSET') {
+                    lines.push(ind + 'OFFSET ' + bodyR);
+
+                } else if (kwU.startsWith('UNION')) {
+                    flushJoins();
+                    lines.push('');
+                    lines.push(ind + kwU);
+                    lines.push('');
+
+                } else {
+                    // fallback: INSERT, UPDATE, SET, DELETE, VALUES, WITH, plain body
+                    flushJoins();
+                    if (kwU) lines.push(ind + kwU + ' ' + bodyR);
+                    else if (bodyR) lines.push(ind + bodyR);
+                }
+            }
+            flushJoins();
+            if (pendingJoinKw) lines.push(ind + '       ' + pendingJoinKw + ' ' + pendingJoinTable);
+
+            return lines.join('\n');
+        }
+
+        // Handle WHERE ( ... AND ... OR ... ) — split the outer parens in WHERE
+        // This is handled naturally by the clause splitter above since AND/OR are top-level clauses.
+        // But we need to handle (expr AND expr) inside WHERE body — keep as-is, only top-level AND/OR split.
+
+        return fmt(rawSql, 0).replace(/\n{3,}/g, '\n\n').trimEnd();
     }
 });
 
