@@ -453,6 +453,11 @@ body.light-theme .tool-tab-add:hover { color: rgba(0,0,0,0.6); background: rgba(
     border-color: rgba(102,126,234,0.4);
     color: #fff;
 }
+.tool-btn:disabled, .tool-btn.disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    pointer-events: none;
+}
 .tool-btn.danger {
     background: rgba(234,102,102,0.2);
     border-color: rgba(234,102,102,0.2);
@@ -571,6 +576,15 @@ body.light-theme .tool-tab-add:hover { color: rgba(0,0,0,0.6); background: rgba(
 .json-number { color: #fbbf24; }
 .json-bool { color: #c084fc; }
 .json-null { color: #94a3b8; }
+
+/* YAML syntax colours */
+.yaml-key   { color: #7dd3fc; }
+.yaml-colon { color: rgba(255,255,255,0.45); }
+.yaml-str   { color: #86efac; }
+.yaml-num   { color: #fbbf24; }
+.yaml-bool  { color: #c084fc; }
+.yaml-null  { color: #94a3b8; }
+.yaml-cmt   { color: #6b7280; font-style: italic; }
 
 /* Regex match highlighting */
 .regex-match {
@@ -864,6 +878,184 @@ body.light-theme .tool-label-input:focus {
     -webkit-user-select: text;
 }
 
+/* ===== Diff Viewer Enhanced ===== */
+
+/* Toolbar separators */
+.diff-toolbar-sep {
+    display: inline-block;
+    width: 1px;
+    height: 20px;
+    background: rgba(255,255,255,0.14);
+    margin: 0 2px;
+    vertical-align: middle;
+    flex-shrink: 0;
+}
+.diff-toolbar-label {
+    font-size: 11.5px;
+    color: rgba(255,255,255,0.35);
+    font-family: 'Inter','Roboto',sans-serif;
+    white-space: nowrap;
+    align-self: center;
+}
+body.light-theme .diff-toolbar-sep { background: rgba(0,0,0,0.12); }
+body.light-theme .diff-toolbar-label { color: rgba(0,0,0,0.35); }
+
+/* Unified diff — dual line numbers */
+.diff-line-num {
+    display: inline-block;
+    width: 35px;
+    text-align: right;
+    margin-right: 4px;
+    color: rgba(255,255,255,0.25);
+    user-select: none;
+    font-size: 12px;
+}
+
+/* Intra-line char highlights */
+.diff-char-del {
+    background: rgba(255,107,107,0.38);
+    border-radius: 2px;
+    padding: 0 1px;
+}
+.diff-char-add {
+    background: rgba(81,207,102,0.38);
+    border-radius: 2px;
+    padding: 0 1px;
+}
+
+/* Empty padding row for split view */
+.diff-line.diff-empty {
+    background: rgba(255,255,255,0.025);
+    min-height: 1.6em; /* match line-height */
+    opacity: 0.4;
+}
+
+/* Split view output */
+.diff-split-output {
+    display: flex;
+    height: 100%;
+    overflow: hidden;
+}
+.diff-split-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+}
+.diff-split-header {
+    flex-shrink: 0;
+    padding: 6px 14px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: rgba(255,255,255,0.4);
+    font-family: 'Roboto', sans-serif;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    background: rgba(0,0,0,0.15);
+}
+body.light-theme .diff-split-header {
+    color: rgba(0,0,0,0.4);
+    border-bottom-color: rgba(0,0,0,0.08);
+    background: rgba(0,0,0,0.03);
+}
+.diff-split-pane {
+    flex: 1;
+    overflow: auto;
+    padding: 6px 0;
+    font-family: 'Consolas','Monaco','Courier New',monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    min-width: 0;
+}
+.diff-split-divider {
+    width: 5px;
+    flex-shrink: 0;
+    background: rgba(255,255,255,0.08);
+}
+body.light-theme .diff-split-divider { background: rgba(0,0,0,0.08); }
+
+/* Inline diff overlay (split view — highlights behind editable textareas) */
+.diff-inline-wrap {
+    position: relative;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.16);
+    border-radius: 10px;
+    overflow: hidden;
+    transition: border-color 0.2s;
+}
+.diff-inline-wrap:focus-within { border-color: rgba(102,126,234,0.4); }
+
+.diff-inline-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none;
+    overflow: hidden;
+    padding-top: 14px; /* match textarea top padding */
+    box-sizing: border-box;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 13.5px; /* match textarea font-size so 1.5em = correct line height */
+    line-height: 1.5;
+    z-index: 0;
+}
+
+.dil-line {
+    height: 1.5em;
+    width: 100%;
+    white-space: pre;
+    color: transparent;
+    text-indent: var(--dil-text-left, 14px);
+}
+.dil-del  { background: rgba(255, 90, 90, 0.18); }
+.dil-chg  { background: rgba(255, 185, 50, 0.16); }
+.dil-add  { background: rgba(81, 207, 102, 0.18); }
+
+/* Char-level highlights inside overlay — no padding so text aligns with textarea */
+.dil-line .diff-char-del {
+    background: rgba(255, 90, 90, 0.55);
+    padding: 0;
+    border-radius: 0;
+}
+.dil-line .diff-char-add {
+    background: rgba(81, 207, 102, 0.55);
+    padding: 0;
+    border-radius: 0;
+}
+
+@keyframes dil-flash {
+    0%   { background: rgba(102,126,234,0.55); }
+    100% { background: transparent; }
+}
+.dil-line.dil-flashing {
+    animation: dil-flash 600ms ease-out forwards;
+}
+
+/* Textarea becomes transparent & no-wrap when overlay is active */
+.tool-textarea.diff-ta-active,
+.ce-ta.diff-ta-active {
+    position: relative;
+    z-index: 1;
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    white-space: pre !important;
+    overflow-wrap: normal !important;
+    word-break: normal !important;
+}
+
+body.light-theme .diff-inline-wrap { background: rgba(255,255,255,0.8); border-color: rgba(0,0,0,0.14); }
+body.light-theme .diff-inline-wrap:focus-within { border-color: rgba(102,126,234,0.5); }
+body.light-theme .dil-del { background: rgba(220, 38, 38, 0.12); }
+body.light-theme .dil-chg { background: rgba(180, 120,  0, 0.12); }
+body.light-theme .dil-add { background: rgba( 22,163, 74, 0.12); }
+body.light-theme .dil-line .diff-char-del { background: rgba(220, 38,  38, 0.40); }
+body.light-theme .dil-line .diff-char-add { background: rgba( 22,163,  74, 0.35); }
+
 /* ===== Responsive ===== */
 @media (max-width: 600px) {
     .tool-strip { gap: 4px; }
@@ -1000,6 +1192,14 @@ body.light-theme .json-string { color: #008000; }
 body.light-theme .json-number { color: #b07000; }
 body.light-theme .json-bool   { color: #0000ff; }
 body.light-theme .json-null   { color: #666; }
+/* light YAML */
+body.light-theme .yaml-key   { color: #0451a5; }
+body.light-theme .yaml-colon { color: rgba(0,0,0,0.35); }
+body.light-theme .yaml-str   { color: #008000; }
+body.light-theme .yaml-num   { color: #b07000; }
+body.light-theme .yaml-bool  { color: #0000ff; }
+body.light-theme .yaml-null  { color: #666; }
+body.light-theme .yaml-cmt   { color: #6a9955; font-style: italic; }
 /* light SQL */
 body.light-theme .sql-kw    { color: #0000ff; }
 body.light-theme .sql-str   { color: #a31515; }
