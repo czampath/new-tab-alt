@@ -137,6 +137,44 @@ function createCodeEditor(wrapper, opts) {
 
     function activeLine() { return ta.value.substring(0, ta.selectionStart).split('\n').length; }
 
+    // ── decoration overlay (ranges highlighted on top of syntax colours) ─────
+    let _decors = [];   // [{start, end, cls}]  — text-offset based
+    let _baseHl = '';   // cached last highlight() output
+
+    // Walk the highlighted HTML, injecting open/close <span> tags at text offsets.
+    // Tags & HTML entities (&amp; etc.) are skipped; each source char = 1 text pos.
+    function applyDecors(html, decors) {
+        if (!decors.length) return html;
+        const evs = [];
+        for (const d of decors) {
+            evs.push({ pos: d.start, open: true,  cls: d.cls });
+            evs.push({ pos: d.end,   open: false });
+        }
+        evs.sort((a, b) => a.pos - b.pos || (a.open ? -1 : 1));
+        let tp = 0, ei = 0, out = '', inTag = false;
+        for (let i = 0; i < html.length; i++) {
+            if (!inTag) {
+                while (ei < evs.length && evs[ei].pos === tp) {
+                    out += evs[ei].open ? `<span class="${evs[ei].cls}">` : '</span>';
+                    ei++;
+                }
+            }
+            const c = html[i];
+            if      (c === '<') { inTag = true;  out += c; }
+            else if (c === '>') { inTag = false; out += c; }
+            else if (!inTag) {
+                if (c === '&') {                       // HTML entity → 1 text char
+                    const semi = html.indexOf(';', i);
+                    if (semi !== -1 && semi - i <= 6) { out += html.slice(i, semi + 1); i = semi; }
+                    else out += c;
+                } else { out += c; }
+                tp++;
+            } else { out += c; }
+        }
+        while (ei < evs.length) { if (!evs[ei++].open) out += '</span>'; }
+        return out;
+    }
+
     function updateGutter(text, line) {
         const n = (text.match(/\n/g) || []).length + 1;
         const frags = [];
@@ -153,7 +191,8 @@ function createCodeEditor(wrapper, opts) {
 
     function update() {
         const text = ta.value;
-        ceCode.innerHTML = highlight(text) + '\n';
+        _baseHl = highlight(text) + '\n';
+        ceCode.innerHTML = _decors.length ? applyDecors(_baseHl, _decors) : _baseHl;
         updateGutter(text, activeLine());
         syncScroll();
     }
@@ -257,7 +296,11 @@ function createCodeEditor(wrapper, opts) {
         getValue() { return ta.value; },
         setValue(v) { ta.value = v; update(); },
         focus()     { ta.focus(); },
-        getTA()     { return ta; }
+        getTA()     { return ta; },
+        setDecorations(arr) {
+            _decors = arr || [];
+            ceCode.innerHTML = _decors.length ? applyDecors(_baseHl, _decors) : _baseHl;
+        }
     };
 }
 
@@ -446,7 +489,49 @@ ToolManager.register('sql-formatter', {
             output.innerHTML = this._highlight(this._basicFmt(input.value));
         };
         document.getElementById('tsMin').onclick = () => {
-            output.textContent = input.value.replace(/\s+/g, ' ').replace(/\s*([,;()=<>])\s*/g, '$1').trim();
+            const sql = input.value;
+            // Tokenise: pull strings/comments out as opaque placeholders so
+            // every subsequent regex only ever touches SQL structure, never literal content.
+            const lits = [];
+            let c = '', i = 0;
+            while (i < sql.length) {
+                if (sql[i] === "'" || sql[i] === '`') {
+                    const q = sql[i]; let j = i + 1;
+                    while (j < sql.length) {
+                        if (sql[j] === q && sql[j+1] === q) { j += 2; continue; }
+                        if (sql[j] === q) { j++; break; }
+                        j++;
+                    }
+                    c += `\x01${lits.length}\x01`; lits.push(sql.slice(i, j)); i = j;
+                } else if (sql[i] === '"') {
+                    let j = i + 1;
+                    while (j < sql.length && sql[j] !== '"') j++;
+                    c += `\x01${lits.length}\x01`; lits.push(sql.slice(i, j + 1)); i = j + 1;
+                } else if (sql[i] === '/' && sql[i+1] === '*') {
+                    let j = i + 2;
+                    while (j < sql.length - 1 && !(sql[j] === '*' && sql[j+1] === '/')) j++;
+                    i = j + 2;                          // strip block comments
+                } else if (sql[i] === '-' && sql[i+1] === '-') {
+                    while (i < sql.length && sql[i] !== '\n') i++;  // strip line comments
+                } else {
+                    c += sql[i++];
+                }
+            }
+            // Collapse structure
+            c = c.replace(/\s+/g, ' ')
+                 .replace(/\s*,\s*/g, ',')
+                 .replace(/\s*\(\s*/g, '(')
+                 .replace(/\s+\)/g, ')')
+                 .replace(/\s*(>=|<=|<>|!=|=)\s*/g, '$1')
+                 .trim();
+            // Re-space around keywords, then collapse multi-spaces and re-strip parens/equals
+            const KW = /\b(SELECT|FROM|WHERE|JOIN|ON|AND|OR|NOT|IN|AS|SET|VALUES|INTO|UPDATE|DELETE|INSERT|REPLACE|MERGE|USING|UNION|ALL|DISTINCT|HAVING|LIMIT|OFFSET|CASE|WHEN|THEN|ELSE|END|INNER|LEFT|RIGHT|FULL|OUTER|CROSS|DUPLICATE|KEY)\b/gi;
+            c = c.replace(KW, ' $1 ')
+                 .replace(/\s{2,}/g, ' ')
+                 .replace(/\s*\(\s*/g, '(')
+                 .replace(/=\s+/g, '=')
+                 .trim();
+            output.textContent = c.replace(/\x01(\d+)\x01/g, (_, n) => lits[+n]);
         };
         document.getElementById('tsConcat').onclick = () => {
             const lines = input.value.split('\n');
@@ -468,6 +553,159 @@ ToolManager.register('sql-formatter', {
         document.getElementById('tsCopy').onclick = () => {
             navigator.clipboard.writeText(output.textContent).then(() => showToast('Copied!'));
         };
+
+        // ── INSERT / UPSERT column-value pairing highlight ──────────────────
+        // Helpers (work on raw SQL text, return character offsets)
+        function _matchParen(sql, openIdx) {
+            let depth = 0, inStr = false;
+            for (let i = openIdx; i < sql.length; i++) {
+                if (inStr) {
+                    if (sql[i] === "'" && sql[i+1] === "'") i++;
+                    else if (sql[i] === "'") inStr = false;
+                    continue;
+                }
+                if (sql[i] === "'") { inStr = true; continue; }
+                if (sql[i] === '(') depth++;
+                else if (sql[i] === ')') { if (--depth === 0) return i; }
+            }
+            return -1;
+        }
+
+        function _caretSlot(sql, parenStart, caretPos) {
+            // Count commas strictly left of caretPos — that index is the slot.
+            let depth = 0, commas = 0, inStr = false;
+            for (let i = parenStart; i < caretPos && i < sql.length; i++) {
+                if (inStr) {
+                    if (sql[i] === "'" && sql[i+1] === "'") i++;
+                    else if (sql[i] === "'") inStr = false;
+                    continue;
+                }
+                if (sql[i] === "'") { inStr = true; continue; }
+                if (sql[i] === '(') depth++;
+                else if (sql[i] === ')') { if (--depth === 0) break; }
+                else if (sql[i] === ',' && depth === 1) commas++;
+            }
+            return commas;
+        }
+
+        function _colRange(sql, colParenStart, idx) {
+            // Returns {start, end} (exclusive end) of the idx-th column name in the list.
+            let depth = 0, colIdx = 0, itemStart = colParenStart + 1;
+            for (let i = colParenStart; i < sql.length; i++) {
+                const c = sql[i];
+                if (c === '(') depth++;
+                else if (c === ')') {
+                    depth--;
+                    if (depth === 0) {
+                        if (colIdx === idx) { return _trimRange(sql, itemStart, i); }
+                        break;
+                    }
+                } else if (c === ',' && depth === 1) {
+                    if (colIdx === idx) { return _trimRange(sql, itemStart, i); }
+                    colIdx++;
+                    itemStart = i + 1;
+                }
+            }
+            return null;
+        }
+
+        function _trimRange(sql, s, e) {
+            while (s < e && /\s/.test(sql[s])) s++;
+            while (e > s && /\s/.test(sql[e - 1])) e--;
+            return s < e ? { start: s, end: e } : null;
+        }
+
+        function _insertDecorations(sql, caret) {
+            // Match: INSERT [OR modifier | IGNORE | LOW_PRIORITY | ...] INTO table (
+            //   or:  REPLACE INTO table (
+            const insRe = /\b(?:INSERT(?:\s+\w+)*\s+INTO|REPLACE\s+INTO)\s+\S+\s*(?=\()/i;
+            const insM  = insRe.exec(sql);
+            if (!insM) return [];
+
+            const colOpen = insM.index + insM[0].length;
+            if (sql[colOpen] !== '(') return [];
+            const colClose = _matchParen(sql, colOpen);
+            if (colClose === -1) return [];
+
+            // Count columns
+            let colCount = 1, depth = 0, inStr = false;
+            for (let i = colOpen; i <= colClose; i++) {
+                if (inStr) { if (sql[i] === "'" && sql[i+1] !== "'") inStr = false; continue; }
+                if (sql[i] === "'") { inStr = true; continue; }
+                if (sql[i] === '(') depth++;
+                else if (sql[i] === ')') { if (--depth === 0) break; }
+                else if (sql[i] === ',' && depth === 1) colCount++;
+            }
+
+            // Find VALUES ( after column list
+            const afterCols = sql.slice(colClose + 1);
+            const valM = /\bVALUES\s*(?=\()/i.exec(afterCols);
+            if (!valM) return [];
+            const valOpen  = colClose + 1 + valM.index + valM[0].length;
+            if (sql[valOpen] !== '(') return [];
+            const valClose = _matchParen(sql, valOpen);
+            if (valClose === -1) return [];
+
+            // Caret inside VALUES paren → highlight matching column
+            if (caret >= valOpen && caret <= valClose) {
+                const slotIdx = _caretSlot(sql, valOpen, caret);
+                if (slotIdx >= colCount) return [];
+                const range = _colRange(sql, colOpen, slotIdx);
+                return range ? [{ start: range.start, end: range.end, cls: 'sql-pair-active' }] : [];
+            }
+
+            // Caret inside column list → highlight matching value
+            if (caret >= colOpen && caret <= colClose) {
+                const slotIdx = _caretSlot(sql, colOpen, caret);
+                if (slotIdx >= colCount) return [];
+                const range = _colRange(sql, valOpen, slotIdx);
+                return range ? [{ start: range.start, end: range.end, cls: 'sql-pair-active' }] : [];
+            }
+
+            return [];
+        }
+
+        const _trackInsert = () => {
+            this._editor.setDecorations(_insertDecorations(input.value, input.selectionStart));
+        };
+        input.addEventListener('keyup',  _trackInsert);
+        input.addEventListener('click',  _trackInsert);
+        input.addEventListener('input',  _trackInsert);
+
+        input.addEventListener('dblclick', () => {
+            const sql = input.value;
+            const caret = input.selectionStart;
+
+            const insRe = /\b(?:INSERT(?:\s+\w+)*\s+INTO|REPLACE\s+INTO)\s+\S+\s*(?=\()/i;
+            const insM  = insRe.exec(sql);
+            if (!insM) return;
+            const colOpen = insM.index + insM[0].length;
+            if (sql[colOpen] !== '(') return;
+            const colClose = _matchParen(sql, colOpen);
+            if (colClose === -1) return;
+
+            const afterCols = sql.slice(colClose + 1);
+            const valM = /\bVALUES\s*(?=\()/i.exec(afterCols);
+            if (!valM) return;
+            const valOpen  = colClose + 1 + valM.index + valM[0].length;
+            if (sql[valOpen] !== '(') return;
+            const valClose = _matchParen(sql, valOpen);
+            if (valClose === -1) return;
+
+            if (caret < valOpen || caret > valClose) return;
+
+            const slotIdx = _caretSlot(sql, valOpen, caret);
+            const range   = _colRange(sql, valOpen, slotIdx);
+            if (!range) return;
+
+            let { start, end } = range;
+            if (sql[start] === "'" && sql[end - 1] === "'") { start++; end--; }
+            if (start >= end) return;
+
+            input.selectionStart = start;
+            input.selectionEnd   = end;
+            _trackInsert();
+        });
     },
     destroy() {},
     saveState() { this._state = this._editor ? this._editor.getValue() : (document.getElementById('tsInput')?.value || ''); },
