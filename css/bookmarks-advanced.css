@@ -1,0 +1,861 @@
+/* ============================================================
+   Advanced Bookmarks — bookmarks-advanced.css
+   ============================================================ */
+
+/* ── Outer grid container ─────────────────────────────────── */
+.bm-advanced-container {
+    display: grid;
+    grid-template-columns: repeat(var(--bm-global-slots, 8), 1fr);
+    grid-auto-flow: row;
+    gap: 10px;
+    align-items: start;
+    width: 100%;
+    margin-bottom: 20px;
+}
+
+/* ── Group ────────────────────────────────────────────────── */
+.bm-group {
+    grid-column: span var(--bm-group-slots, 4);
+    box-sizing: border-box;
+    min-width: 0;
+    animation: popIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.bm-group-name {
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    opacity: 0.55;
+    margin-bottom: 7px;
+    padding-left: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.bm-group-body {
+    display: grid;
+    grid-template-columns: repeat(var(--bm-group-slots, 4), 1fr);
+    gap: 8px;
+}
+
+/* ── Slot ─────────────────────────────────────────────────── */
+.bm-slot {
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    text-align: center;
+    text-decoration: none;
+    color: inherit;
+    cursor: pointer;
+    position: relative;
+    transition: background 0.2s ease, transform 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 14px 8px;
+    min-height: 84px;   /* matches icon(36) + gap(6) + name(~14) + padding(14×2) */
+    animation: popIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.bm-slot:hover {
+    background: rgba(255, 255, 255, 0.22);
+    transform: translateY(-2px);
+}
+
+.bm-slot-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9px;
+    margin-bottom: 6px;
+    width: 36px;
+    height: 36px;
+    font-size: 20px;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    font-family: 'Inter', sans-serif;
+    flex-shrink: 0;
+}
+
+.bm-slot-icon img {
+    width: 100%;
+    height: 100%;
+    border-radius: 7px;
+    object-fit: contain;
+}
+
+.bm-slot-name {
+    font-size: 11px;
+    font-weight: 500;
+    word-break: break-word;
+    line-height: 1.25;
+    max-width: 100%;
+}
+
+/* ── Hide names variant ───────────────────────────────────── */
+.bm-group.bm-hide-names .bm-slot-name {
+    display: none;
+}
+
+.bm-group.bm-hide-names .bm-slot {
+    padding-top: 12px;
+    padding-bottom: 12px;
+}
+
+/* ── Slot size — small ────────────────────────────────────── */
+.bm-group.bm-slot-small .bm-slot {
+    padding: 8px 5px;
+    border-radius: 9px;
+    min-height: 58px;
+}
+
+.bm-group.bm-slot-small .bm-slot-add {
+    padding: 8px 5px;
+    font-size: 15px;
+    border-radius: 9px;
+    min-height: 58px;
+}
+
+.bm-group.bm-slot-small .bm-slot-icon {
+    width: 26px;
+    height: 26px;
+    font-size: 14px;
+    border-radius: 6px;
+    margin-bottom: 4px;
+}
+
+.bm-group.bm-slot-small .bm-slot-name {
+    font-size: 9.5px;
+}
+
+/* ── Slot size — large ────────────────────────────────────── */
+.bm-group.bm-slot-large .bm-slot {
+    padding: 18px 10px;
+    border-radius: 14px;
+    min-height: 108px;
+}
+
+.bm-group.bm-slot-large .bm-slot-add {
+    padding: 18px 10px;
+    font-size: 26px;
+    border-radius: 14px;
+    min-height: 108px;
+}
+
+.bm-group.bm-slot-large .bm-slot-icon {
+    width: 48px;
+    height: 48px;
+    font-size: 26px;
+    border-radius: 12px;
+    margin-bottom: 8px;
+}
+
+.bm-group.bm-slot-large .bm-slot-name {
+    font-size: 12.5px;
+}
+
+/* ── Slot edit button ─────────────────────────────────────── */
+.bm-slot-edit-btn {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    background: rgba(0, 0, 0, 0.4);
+    border: none;
+    color: #fff;
+    width: 19px;
+    height: 19px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 10px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s ease;
+    line-height: 1;
+    padding: 0;
+    z-index: 1;
+}
+
+.bm-slot-edit-btn:hover {
+    background: rgba(0, 0, 0, 0.65);
+}
+
+.bm-slot:hover .bm-slot-edit-btn {
+    display: flex;
+}
+
+/* ── Add-bookmark slot ────────────────────────────────────── */
+.bm-slot-add {
+    background: rgba(255, 255, 255, 0.06);
+    border: 2px dashed rgba(255, 255, 255, 0.22);
+    border-radius: 12px;
+    cursor: pointer;
+    display: none;            /* hidden until edit mode */
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 14px 8px;
+    min-height: 84px;         /* matches medium .bm-slot */
+    transition: background 0.2s ease, border-color 0.2s ease;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 20px;
+}
+
+/* Reveal add slot + always-on edit buttons in edit mode */
+.bm-advanced-container.bm-edit-mode .bm-slot-add {
+    display: flex;
+}
+
+.bm-advanced-container.bm-edit-mode .bm-slot-edit-btn {
+    display: flex;
+}
+
+.bm-slot-add:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.4);
+    color: rgba(255, 255, 255, 0.7);
+}
+
+/* ── Edit-mode toggle button (section header) ────────────── */
+.bm-edit-toggle-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: #fff;
+    padding: 0 13px;
+    height: 34px;
+    border-radius: 17px;
+    cursor: pointer;
+    font-size: 14px;
+    font-family: 'Roboto', sans-serif;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    transition: background 0.2s ease, box-shadow 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.bm-edit-toggle-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.bm-edit-toggle-btn.active {
+    background: rgba(255, 255, 255, 0.32);
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.55);
+}
+
+body.light-theme .bm-edit-toggle-btn {
+    background: rgba(0, 0, 0, 0.12);
+    color: #333;
+}
+
+body.light-theme .bm-edit-toggle-btn:hover {
+    background: rgba(0, 0, 0, 0.2);
+}
+
+body.light-theme .bm-edit-toggle-btn.active {
+    background: rgba(0, 0, 0, 0.2);
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35);
+}
+
+/* ── Manage groups button (in section header) ─────────────── */
+.manage-groups-btn {
+    background: rgba(255, 255, 255, 0.18);
+    border: none;
+    color: #fff;
+    padding: 5px 13px;
+    height: 34px;
+    border-radius: 17px;
+    cursor: pointer;
+    font-size: 12.5px;
+    font-weight: 500;
+    font-family: 'Roboto', sans-serif;
+    letter-spacing: -0.01em;
+    transition: background 0.2s ease;
+    display: none;
+    align-items: center;
+    gap: 5px;
+}
+
+.manage-groups-btn.visible {
+    display: flex;
+}
+
+.manage-groups-btn:hover {
+    background: rgba(255, 255, 255, 0.28);
+}
+
+/* ============================================================
+   Group Management Overlay Panel
+   ============================================================ */
+.bm-mgmt-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(5px);
+    align-items: center;
+    justify-content: center;
+    z-index: 1100;
+}
+
+.bm-mgmt-overlay.active {
+    display: flex;
+    animation: modalFadeIn 0.2s ease-out;
+}
+
+.bm-mgmt-overlay.closing {
+    display: flex;
+    animation: modalFadeOut 0.2s ease-out;
+}
+
+.bm-mgmt-panel {
+    background: #fff;
+    border-radius: 18px;
+    width: 90%;
+    max-width: 560px;
+    max-height: 88vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+}
+
+.bm-mgmt-overlay.active .bm-mgmt-panel {
+    animation: modalPopIn 0.3s cubic-bezier(0.34, 1.3, 0.64, 1);
+}
+
+.bm-mgmt-overlay.closing .bm-mgmt-panel {
+    animation: modalPopOut 0.2s cubic-bezier(0.6, 0, 0.8, 0.4);
+}
+
+.bm-mgmt-header {
+    padding: 22px 24px 16px;
+    border-bottom: 1px solid #f0f0f0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+}
+
+.bm-mgmt-title {
+    font-size: 20px;
+    font-weight: 600;
+    color: #222;
+    letter-spacing: -0.03em;
+}
+
+.bm-mgmt-close-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 22px;
+    color: #999;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.bm-mgmt-close-btn:hover {
+    background: #f0f0f0;
+    color: #333;
+}
+
+/* Global slots config row */
+.bm-mgmt-global {
+    padding: 13px 24px;
+    border-bottom: 1px solid #f0f0f0;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-shrink: 0;
+    background: #fafafa;
+}
+
+.bm-mgmt-global label {
+    font-size: 13px;
+    font-weight: 500;
+    color: #555;
+    white-space: nowrap;
+}
+
+.bm-mgmt-global input[type="number"] {
+    width: 62px;
+    padding: 6px 10px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 13px;
+    font-family: 'Roboto', sans-serif;
+    text-align: center;
+    transition: border-color 0.2s ease;
+}
+
+.bm-mgmt-global input[type="number"]:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.bm-mgmt-slots-hint {
+    font-size: 11.5px;
+    color: #aaa;
+}
+
+/* Group list */
+.bm-mgmt-list {
+    overflow-y: auto;
+    flex: 1;
+    padding: 8px 12px;
+}
+
+.bm-mgmt-list-empty {
+    text-align: center;
+    color: #bbb;
+    font-size: 13px;
+    padding: 40px 0;
+    font-style: italic;
+}
+
+.bm-mgmt-group-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 10px;
+    border-radius: 10px;
+    cursor: grab;
+    transition: background 0.15s ease;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.bm-mgmt-group-row:hover {
+    background: #f5f5f5;
+}
+
+.bm-mgmt-group-row.dragging {
+    opacity: 0.4;
+}
+
+.bm-mgmt-group-row.drag-over {
+    background: #ebefff;
+    outline: 2px dashed rgba(102, 126, 234, 0.5);
+    outline-offset: -2px;
+    border-radius: 10px;
+}
+
+.bm-mgmt-drag-handle {
+    color: #ccc;
+    font-size: 16px;
+    cursor: grab;
+    padding: 2px 4px;
+    flex-shrink: 0;
+}
+
+.bm-mgmt-group-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.bm-mgmt-group-name-text {
+    font-size: 13.5px;
+    font-weight: 500;
+    color: #333;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.bm-mgmt-group-meta {
+    font-size: 11px;
+    color: #aaa;
+    margin-top: 1px;
+}
+
+.bm-mgmt-group-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.bm-mgmt-icon-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    width: 30px;
+    height: 30px;
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    color: #888;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.bm-mgmt-icon-btn:hover {
+    background: #eee;
+    color: #333;
+}
+
+.bm-mgmt-icon-btn.danger:hover {
+    background: rgba(220, 53, 69, 0.1);
+    color: #dc3545;
+}
+
+/* Add group button row */
+.bm-mgmt-footer {
+    padding: 12px 24px 18px;
+    border-top: 1px solid #f0f0f0;
+    flex-shrink: 0;
+}
+
+.bm-mgmt-add-group-btn {
+    width: 100%;
+    padding: 10px;
+    background: rgba(102, 126, 234, 0.08);
+    border: 1.5px dashed rgba(102, 126, 234, 0.4);
+    border-radius: 10px;
+    color: #667eea;
+    font-size: 13.5px;
+    font-weight: 500;
+    font-family: 'Roboto', sans-serif;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.bm-mgmt-add-group-btn:hover {
+    background: rgba(102, 126, 234, 0.13);
+    border-color: rgba(102, 126, 234, 0.6);
+}
+
+/* ============================================================
+   Group Editor Modal
+   ============================================================ */
+.bm-editor-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(5px);
+    align-items: center;
+    justify-content: center;
+    z-index: 1200;
+}
+
+.bm-editor-overlay.active {
+    display: flex;
+    animation: modalFadeIn 0.18s ease-out;
+}
+
+.bm-editor-overlay.closing {
+    display: flex;
+    animation: modalFadeOut 0.18s ease-out;
+}
+
+.bm-editor-panel {
+    background: #fff;
+    border-radius: 18px;
+    width: 90%;
+    max-width: 480px;
+    max-height: 92vh;
+    overflow-y: auto;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+    display: flex;
+    flex-direction: column;
+}
+
+.bm-editor-overlay.active .bm-editor-panel {
+    animation: modalPopIn 0.3s cubic-bezier(0.34, 1.3, 0.64, 1);
+}
+
+.bm-editor-overlay.closing .bm-editor-panel {
+    animation: modalPopOut 0.2s cubic-bezier(0.6, 0, 0.8, 0.4);
+}
+
+.bm-editor-inner {
+    padding: 26px 26px 10px;
+    flex: 1;
+}
+
+.bm-editor-title {
+    font-size: 20px;
+    font-weight: 600;
+    color: #222;
+    letter-spacing: -0.03em;
+    margin-bottom: 22px;
+}
+
+.bm-editor-row {
+    margin-bottom: 16px;
+}
+
+.bm-editor-row label {
+    display: block;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: #666;
+    margin-bottom: 6px;
+    letter-spacing: -0.01em;
+}
+
+.bm-editor-row input[type="text"],
+.bm-editor-row input[type="number"],
+.bm-editor-row select {
+    width: 100%;
+    padding: 9px 11px;
+    border: 2px solid #e8e8e8;
+    border-radius: 9px;
+    font-size: 13.5px;
+    font-family: 'Roboto', sans-serif;
+    color: #333;
+    transition: border-color 0.2s ease;
+    background: #fff;
+    box-sizing: border-box;
+}
+
+.bm-editor-row input[type="text"]:focus,
+.bm-editor-row input[type="number"]:focus,
+.bm-editor-row select:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.bm-editor-toggle-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.bm-editor-toggle-row label {
+    font-size: 13px;
+    font-weight: 500;
+    color: #555;
+}
+
+/* Segmented control for slot size */
+.bm-seg-control {
+    display: flex;
+    border: 2px solid #e8e8e8;
+    border-radius: 9px;
+    overflow: hidden;
+}
+
+.bm-seg-control button {
+    flex: 1;
+    padding: 8px 10px;
+    background: #fff;
+    border: none;
+    font-size: 12.5px;
+    font-weight: 500;
+    font-family: 'Roboto', sans-serif;
+    color: #888;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.bm-seg-control button + button {
+    border-left: 1px solid #e8e8e8;
+}
+
+.bm-seg-control button.active {
+    background: #667eea;
+    color: #fff;
+}
+
+.bm-seg-control button:hover:not(.active) {
+    background: #f5f5f5;
+    color: #333;
+}
+
+/* Slots count preview */
+.bm-slots-preview {
+    display: flex;
+    gap: 3px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+}
+
+.bm-slots-preview-cell {
+    width: 18px;
+    height: 14px;
+    border-radius: 3px;
+    background: #e8e8e8;
+    transition: background 0.15s ease;
+}
+
+.bm-slots-preview-cell.active {
+    background: #667eea;
+}
+
+/* Color + opacity row */
+.bm-color-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.bm-color-row input[type="color"] {
+    width: 42px;
+    height: 36px;
+    border: 2px solid #e8e8e8;
+    border-radius: 8px;
+    cursor: pointer;
+    padding: 2px;
+    background: #fff;
+    flex-shrink: 0;
+}
+
+.bm-color-row input[type="range"] {
+    flex: 1;
+    accent-color: #667eea;
+}
+
+.bm-color-row input[type="number"] {
+    width: 70px !important;
+    flex-shrink: 0;
+}
+
+.bm-color-opacity-label {
+    font-size: 12px;
+    color: #aaa;
+    min-width: 32px;
+    text-align: right;
+}
+
+/* Divider */
+.bm-editor-divider {
+    border: none;
+    border-top: 1px solid #f0f0f0;
+    margin: 18px 0;
+}
+
+/* Editor footer */
+.bm-editor-footer {
+    display: flex;
+    gap: 10px;
+    padding: 14px 26px 22px;
+    border-top: 1px solid #f0f0f0;
+    flex-shrink: 0;
+}
+
+.bm-editor-footer button {
+    flex: 1;
+    padding: 11px;
+    border: none;
+    border-radius: 10px;
+    font-size: 13.5px;
+    font-weight: 500;
+    font-family: 'Roboto', sans-serif;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.bm-editor-save-btn {
+    background: #667eea;
+    color: #fff;
+}
+
+.bm-editor-save-btn:hover {
+    background: #5568d3;
+}
+
+.bm-editor-cancel-btn {
+    background: #e0e0e0;
+    color: #333;
+}
+
+.bm-editor-cancel-btn:hover {
+    background: #d0d0d0;
+}
+
+/* ── Advanced bookmark modal — move-to-group row ──────────── */
+#bmGroupMoveRow {
+    display: none;
+}
+
+#bmGroupMoveRow.visible {
+    display: block;
+}
+
+#bmGroupMoveRow select {
+    width: 100%;
+    padding: 9px 11px;
+    border: 2px solid #e8e8e8;
+    border-radius: 9px;
+    font-size: 13.5px;
+    font-family: 'Roboto', sans-serif;
+    color: #333;
+    background: #fff;
+    box-sizing: border-box;
+    transition: border-color 0.2s ease;
+}
+
+#bmGroupMoveRow select:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+/* ============================================================
+   Light theme overrides
+   ============================================================ */
+body.light-theme .bm-slot {
+    background: rgba(0, 0, 0, 0.08);
+    color: #333;
+}
+
+body.light-theme .bm-slot:hover {
+    background: rgba(0, 0, 0, 0.14);
+}
+
+body.light-theme .bm-slot-add {
+    background: rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.18);
+    color: rgba(0, 0, 0, 0.35);
+}
+
+body.light-theme .bm-slot-add:hover {
+    background: rgba(0, 0, 0, 0.08);
+    border-color: rgba(0, 0, 0, 0.3);
+    color: rgba(0, 0, 0, 0.6);
+}
+
+body.light-theme .bm-group-name {
+    color: #222;
+}
+
+body.light-theme .manage-groups-btn {
+    background: rgba(0, 0, 0, 0.12);
+    color: #333;
+}
+
+body.light-theme .manage-groups-btn:hover {
+    background: rgba(0, 0, 0, 0.2);
+}
+
+body.light-theme .bm-slot-edit-btn {
+    background: rgba(0, 0, 0, 0.25);
+}
+
+body.light-theme .bm-slot-edit-btn:hover {
+    background: rgba(0, 0, 0, 0.45);
+}
+
+/* ============================================================
+   Responsive
+   ============================================================ */
+@media (max-width: 600px) {
+    .bm-advanced-container {
+        grid-template-columns: repeat(4, 1fr) !important;
+    }
+
+    .bm-group {
+        grid-column: span 4 !important;
+    }
+}

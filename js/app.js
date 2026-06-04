@@ -538,6 +538,25 @@ function applySettings() {
     document.getElementById('weatherApiKey').value = settings.weatherApiKey || '';
     document.getElementById('weatherLat').value = settings.weatherLat || '';
     document.getElementById('weatherLon').value = settings.weatherLon || '';
+
+    // Sync advanced bookmarks mode toggle (read from its own storage key)
+    try {
+        const advCfg = JSON.parse(localStorage.getItem('advancedBookmarksConfig') || '{}');
+        const toggleAdv = document.getElementById('toggleAdvancedBookmarks');
+        if (toggleAdv) toggleAdv.checked = !!advCfg.enabled;
+        // Hide basic grid early if advanced mode is on (avoids first-paint flash)
+        if (advCfg.enabled) {
+            const grid = document.getElementById('bookmarksGrid');
+            const advContainer = document.getElementById('advancedBookmarksContainer');
+            const addBtn = document.getElementById('addBookmarkBtn');
+            const editBtn = document.getElementById('bmEditToggleBtn');
+            if (grid) grid.style.display = 'none';
+            if (advContainer) advContainer.style.display = '';
+            if (addBtn) addBtn.style.display = 'none';
+            if (editBtn) editBtn.style.display = '';
+            // manageGroupsBtn visibility is controlled by edit mode, not here
+        }
+    } catch (e) {}
 }
 
 applySettings();
@@ -624,6 +643,26 @@ toggleFavicons.addEventListener('change', () => {
     settings.showFavicons = toggleFavicons.checked;
     localStorage.setItem('settings', JSON.stringify(settings));
     renderBookmarks();
+    if (window.advancedBookmarks) window.advancedBookmarks.render();
+});
+
+// Advanced bookmark mode toggle
+document.getElementById('toggleAdvancedBookmarks').addEventListener('change', function () {
+    if (!window.advancedBookmarks) return;
+    const enabling = this.checked;
+    // Only offer migration when there are no groups yet (first-time setup)
+    if (enabling && window.advancedBookmarks.hasNoGroups()) {
+        const basicBms = JSON.parse(localStorage.getItem('bookmarks') || '[]');
+        if (basicBms.length > 0 && confirm('Migrate your existing bookmarks into a default group in advanced mode?')) {
+            window.advancedBookmarks.migrate();
+        }
+    }
+    window.advancedBookmarks.setMode(enabling);
+});
+
+// Manage Groups button
+document.getElementById('manageGroupsBtn').addEventListener('click', () => {
+    if (window.advancedBookmarks) window.advancedBookmarks.openGroupManager();
 });
 
 toggleSearch.addEventListener('change', () => {
@@ -699,6 +738,9 @@ document.body.addEventListener('mouseover', (e) => {
         '.settings-btn',
         '.settings-panel',
         '.tool-strip',
+        '.bm-mgmt-overlay',
+        '.bm-editor-overlay',
+        '#advancedBookmarkModal',
         'input',
         'button'
     ];
@@ -720,6 +762,9 @@ document.body.addEventListener('mouseout', (e) => {
         '.settings-btn',
         '.settings-panel',
         '.tool-strip',
+        '.bm-mgmt-overlay',
+        '.bm-editor-overlay',
+        '#advancedBookmarkModal',
         'input',
         'button'
     ];
@@ -751,9 +796,15 @@ function isModalOrPanelOpen() {
     const guideModal = document.getElementById('guideModal');
     const settingsPanel = document.getElementById('settingsPanel');
     const toolViewport = document.getElementById('toolViewport');
-    
+    const advBmModal = document.getElementById('advancedBookmarkModal');
+    const bmMgmt = document.getElementById('bmMgmtOverlay');
+    const bmEditor = document.getElementById('bmEditorOverlay');
+
     return (modal && modal.classList.contains('active')) ||
            (guideModal && guideModal.classList.contains('active')) ||
            (settingsPanel && settingsPanel.classList.contains('active')) ||
-           (toolViewport && toolViewport.classList.contains('active'));
+           (toolViewport && toolViewport.classList.contains('active')) ||
+           (advBmModal && advBmModal.classList.contains('active')) ||
+           (bmMgmt && bmMgmt.classList.contains('active')) ||
+           (bmEditor && bmEditor.classList.contains('active'));
 }

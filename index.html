@@ -9,6 +9,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..600&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/tools.css">
+    <link rel="stylesheet" href="css/bookmarks-advanced.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
 </head>
 <body class="main-body">
@@ -77,6 +78,12 @@
         </div>
         <div class="setting-item">
             <div class="toggle-label">
+                <label>Advanced Bookmark Groups</label>
+                <label class="toggle-switch"><input type="checkbox" id="toggleAdvancedBookmarks"><span class="toggle-slider"></span></label>
+            </div>
+        </div>
+        <div class="setting-item">
+            <div class="toggle-label">
                 <label>Fetch Bookmark Favicons</label>
                 <label class="toggle-switch"><input type="checkbox" id="toggleFavicons"><span class="toggle-slider"></span></label>
             </div>
@@ -134,9 +141,14 @@
         <div class="bookmarks-section">
             <div class="section-header">
                 <h2>Quick Access</h2>
-                <button class="add-btn" id="addBookmarkBtn">+</button>
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <button class="bm-edit-toggle-btn" id="bmEditToggleBtn" title="Toggle edit mode" style="display:none;">&#9998;</button>
+                    <button class="manage-groups-btn" id="manageGroupsBtn">⚙ Groups</button>
+                    <button class="add-btn" id="addBookmarkBtn">+</button>
+                </div>
             </div>
             <div class="bookmarks-grid" id="bookmarksGrid"></div>
+            <div class="bm-advanced-container" id="advancedBookmarksContainer" style="display:none;"></div>
         </div>
     </div>
 
@@ -214,6 +226,7 @@
 
     <!-- Scripts -->
     <script src="js/app.js"></script>
+    <script src="js/bookmarks-advanced.js"></script>
     <script src="js/cat.js"></script>
     <script src="js/sparks.js"></script>
     <script src="js/tools-core.js"></script>
