@@ -803,6 +803,57 @@ body.light-theme .bm-edit-toggle-btn.active {
 }
 
 /* ============================================================
+   Drag & Drop
+   ============================================================ */
+
+/* Edit mode: slots show grab cursor and no hover lift (lift is reserved for drag) */
+.bm-advanced-container.bm-edit-mode .bm-slot {
+    cursor: grab;
+    touch-action: none;  /* prevent scroll interfering with drag on touch */
+}
+
+.bm-advanced-container.bm-edit-mode .bm-slot:active {
+    cursor: grabbing;
+}
+
+/* Suppress hover translateY in edit mode so it doesn't fight drag feedback */
+.bm-advanced-container.bm-edit-mode .bm-slot:hover {
+    transform: none;
+}
+
+/* Floating ghost that follows the cursor */
+.bm-drag-ghost {
+    cursor: grabbing !important;
+    animation: none !important;   /* no popIn during drag */
+    border-radius: 12px;
+}
+
+.bm-drag-ghost.bm-drag-ghost-small {
+    border-radius: 9px;
+}
+
+.bm-drag-ghost.bm-drag-ghost-large {
+    border-radius: 14px;
+}
+
+/* Invisible placeholder that holds the gap where the item will land */
+.bm-drag-placeholder {
+    opacity: 0;
+    pointer-events: none;
+    border-radius: 12px;
+    min-height: 84px;      /* medium default */
+    background: transparent;
+}
+
+.bm-group.bm-slot-small .bm-drag-placeholder {
+    min-height: 58px;
+}
+
+.bm-group.bm-slot-large .bm-drag-placeholder {
+    min-height: 108px;
+}
+
+/* ============================================================
    Light theme overrides
    ============================================================ */
 body.light-theme .bm-slot {

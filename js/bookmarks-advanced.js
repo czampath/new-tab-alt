@@ -10,6 +10,7 @@
 
     // ── Constants ─────────────────────────────────────────────
     const STORAGE_KEY = 'advancedBookmarksConfig';
+    const DRAG_THRESHOLD = 6; // px movement before drag is committed
 
     const DEFAULT_BORDER = () => ({
         style: 'none',
@@ -42,6 +43,7 @@
     let activeModalContext = null; // { groupId, bookmarkId | null }
     let editingGroupId = null;
     let editMode = false;
+    let dragState = null;  // active drag context; null when idle
 
     // ── ID generation ─────────────────────────────────────────
     function generateId() {
@@ -234,6 +236,9 @@
             const el = createGroupElement(group, slots, showFavicons, idx);
             container.appendChild(el);
         });
+
+        // Attach drag listeners once after all groups are rendered
+        initDrag(container);
     }
 
     function createGroupElement(group, slots, showFavicons, groupIdx) {
@@ -336,6 +341,9 @@
             e.stopPropagation();
             openAdvancedBookmarkModal(groupId, bm.id);
         });
+
+        slot.dataset.bookmarkId = bm.id;
+        slot.dataset.groupId = groupId;
 
         slot.appendChild(iconEl);
         slot.appendChild(nameEl);
@@ -969,6 +977,328 @@
             if (editToggleBtn) editToggleBtn.style.display = 'none';
             editMode = false;
         }
+    }
+
+    // ── Bookmark Drag & Drop ──────────────────────────────────────
+    // iPhone-style: picked-up slot becomes a floating ghost;
+    // remaining slots shift live to reveal the insert point.
+
+    function initDrag(container) {
+        // Guard: only attach once per container instance (innerHTML wipe creates a fresh node)
+        if (container.dataset.dragReady === '1') return;
+        container.dataset.dragReady = '1';
+        container.addEventListener('pointerdown', onSlotPointerDown);
+        // Prevent the browser's native HTML5 link-drag from hijacking pointer events
+        // on <a> slot elements while in edit mode.
+        container.addEventListener('dragstart', (e) => {
+            if (editMode) e.preventDefault();
+        });
+    }
+
+    function onSlotPointerDown(e) {
+        if (!editMode) return;
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+
+        const slot = e.target.closest('.bm-slot');
+        if (!slot) return;
+        // Don't hijack clicks on the edit pencil button
+        if (e.target.closest('.bm-slot-edit-btn')) return;
+
+        const bookmarkId = slot.dataset.bookmarkId;
+        if (!bookmarkId) return;
+
+        const groupId = slot.dataset.groupId;
+        if (!groupId) return;
+
+        dragState = {
+            bookmarkId,
+            fromGroupId: groupId,
+            sourceEl: slot,
+            ghostEl: null,
+            placeholderEl: null,
+            startX: e.clientX,
+            startY: e.clientY,
+            offsetX: 0,
+            offsetY: 0,
+            lastGroupId: null,
+            lastInsertIndex: -1,
+            started: false,
+            pointerId: e.pointerId
+        };
+
+        // Use set/releasePointerCapture so pointermove fires everywhere
+        try { slot.setPointerCapture(e.pointerId); } catch {}
+
+        document.addEventListener('pointermove', onDragMove, { passive: false });
+        document.addEventListener('pointerup',   onDragEnd);
+        document.addEventListener('pointercancel', onDragCancel);
+    }
+
+    function onDragMove(e) {
+        if (!dragState) return;
+
+        const dx = e.clientX - dragState.startX;
+        const dy = e.clientY - dragState.startY;
+
+        if (!dragState.started) {
+            if (Math.sqrt(dx * dx + dy * dy) < DRAG_THRESHOLD) return;
+            startActualDrag(e);
+        }
+
+        // Move ghost
+        dragState.ghostEl.style.left = (e.clientX - dragState.offsetX) + 'px';
+        dragState.ghostEl.style.top  = (e.clientY - dragState.offsetY) + 'px';
+
+        e.preventDefault(); // suppress scroll while dragging
+
+        // Update drop preview
+        const target = getDropTarget(e.clientX, e.clientY);
+        if (target &&
+            (target.groupId !== dragState.lastGroupId ||
+             target.insertIndex !== dragState.lastInsertIndex)) {
+            movePlaceholderAnimated(target.groupId, target.insertIndex);
+            dragState.lastGroupId    = target.groupId;
+            dragState.lastInsertIndex = target.insertIndex;
+        }
+    }
+
+    function startActualDrag(e) {
+        dragState.started = true;
+        const slot = dragState.sourceEl;
+        const rect = slot.getBoundingClientRect();
+
+        dragState.offsetX = e.clientX - rect.left;
+        dragState.offsetY = e.clientY - rect.top;
+
+        // ── Ghost (floating clone) ─────────────────────────────
+        const ghost = slot.cloneNode(true);
+        ghost.className = 'bm-slot bm-drag-ghost';
+        // Carry slot-size styles from the group
+        const groupEl = slot.closest('.bm-group');
+        if (groupEl) {
+            if (groupEl.classList.contains('bm-slot-small')) ghost.classList.add('bm-drag-ghost-small');
+            if (groupEl.classList.contains('bm-slot-large')) ghost.classList.add('bm-drag-ghost-large');
+        }
+        ghost.style.cssText = [
+            'position:fixed',
+            'width:'  + rect.width  + 'px',
+            'height:' + rect.height + 'px',
+            'left:'   + rect.left   + 'px',
+            'top:'    + rect.top    + 'px',
+            'z-index:9000',
+            'pointer-events:none',
+            'opacity:0.92',
+            'transform:scale(1.07) translateZ(0)',
+            'box-shadow:0 12px 32px rgba(0,0,0,0.45)',
+            'transition:box-shadow 0.1s ease',
+            'will-change:left,top'
+        ].join(';');
+        document.body.appendChild(ghost);
+        dragState.ghostEl = ghost;
+
+        // ── Placeholder (invisible gap in grid) ────────────────
+        const placeholder = document.createElement('div');
+        placeholder.className = 'bm-drag-placeholder';
+        dragState.placeholderEl = placeholder;
+
+        // Replace source slot with placeholder (maintains its original position)
+        slot.parentNode.insertBefore(placeholder, slot);
+        slot.remove();
+
+        // Record initial state so duplicate-move check works
+        dragState.lastGroupId = dragState.fromGroupId;
+        const body = placeholder.parentNode;
+        const realSlots = getRealSlots(body);
+        dragState.lastInsertIndex = realSlots.indexOf(placeholder); // placeholder is in this list
+    }
+
+    // Returns all non-add, non-placeholder slots in a group body
+    function getRealSlots(body) {
+        return Array.from(body.children).filter(c =>
+            c.classList.contains('bm-slot') ||
+            c.classList.contains('bm-drag-placeholder')
+        );
+    }
+
+    function getDropTarget(x, y) {
+        const container = document.getElementById('advancedBookmarksContainer');
+        if (!container) return null;
+
+        const groupEls = Array.from(container.querySelectorAll('.bm-group'));
+
+        // Find group that contains the cursor, else the nearest one
+        let targetGroupEl = null;
+        let minDist = Infinity;
+        for (const g of groupEls) {
+            const r = g.getBoundingClientRect();
+            if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
+                targetGroupEl = g;
+                minDist = 0;
+                break;
+            }
+            const cx = Math.max(r.left, Math.min(x, r.right));
+            const cy = Math.max(r.top,  Math.min(y, r.bottom));
+            const d  = (x - cx) ** 2 + (y - cy) ** 2;
+            if (d < minDist) { minDist = d; targetGroupEl = g; }
+        }
+        if (!targetGroupEl) return null;
+
+        const groupId = targetGroupEl.dataset.groupId;
+        const body = targetGroupEl.querySelector('.bm-group-body');
+
+        // Real bookmark slots only (not the add-btn or the placeholder itself)
+        const bookmarkSlots = Array.from(body.children).filter(c =>
+            c.classList.contains('bm-slot')
+        );
+
+        if (!bookmarkSlots.length) return { groupId, insertIndex: 0 };
+
+        // Find nearest slot by Euclidean distance to centre
+        let nearestIdx = 0;
+        let nearestRect = null;
+        let nearestDist = Infinity;
+        for (let i = 0; i < bookmarkSlots.length; i++) {
+            const r  = bookmarkSlots[i].getBoundingClientRect();
+            const cx = r.left + r.width  / 2;
+            const cy = r.top  + r.height / 2;
+            const d  = (x - cx) ** 2 + (y - cy) ** 2;
+            if (d < nearestDist) { nearestDist = d; nearestIdx = i; nearestRect = r; }
+        }
+
+        // Left half → insert before; right half → insert after
+        const midX = nearestRect.left + nearestRect.width / 2;
+        const insertIndex = (x <= midX) ? nearestIdx : nearestIdx + 1;
+
+        return { groupId, insertIndex };
+    }
+
+    function movePlaceholderAnimated(targetGroupId, insertIndex) {
+        // FLIP technique – animate slots smoothly when the placeholder moves.
+        const container = document.getElementById('advancedBookmarksContainer');
+        if (!container) { movePlaceholder(targetGroupId, insertIndex); return; }
+
+        // First: snapshot every slot's current screen position
+        const slotEls = Array.from(container.querySelectorAll('.bm-slot'));
+        const firstRects = new Map();
+        slotEls.forEach(s => firstRects.set(s, s.getBoundingClientRect()));
+
+        // Last: actually move the placeholder (triggers grid reflow)
+        movePlaceholder(targetGroupId, insertIndex);
+
+        // Invert + Play
+        slotEls.forEach(s => {
+            const f = firstRects.get(s);
+            if (!f) return;
+            const l = s.getBoundingClientRect();
+            const dx = f.left - l.left;
+            const dy = f.top  - l.top;
+            if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return; // didn't move
+
+            // Snap to old position with no transition
+            s.style.transition = 'none';
+            s.style.transform  = 'translate(' + dx + 'px,' + dy + 'px)';
+
+            // Force sync reflow so the browser sees the snapped state before animating
+            // eslint-disable-next-line no-unused-expressions
+            s.getBoundingClientRect();
+
+            // Animate back to natural grid position
+            s.style.transition = 'transform 140ms ease-out';
+            s.style.transform  = '';
+        });
+    }
+
+    function movePlaceholder(targetGroupId, insertIndex) {
+        const placeholder = dragState.placeholderEl;
+        if (!placeholder) return;
+
+        const targetGroupEl = document.querySelector(
+            '.bm-group[data-group-id="' + targetGroupId + '"]'
+        );
+        if (!targetGroupEl) return;
+        const targetBody = targetGroupEl.querySelector('.bm-group-body');
+
+        // Remove from current position, get fresh slot list for that body
+        placeholder.remove();
+        const bookmarkSlots = Array.from(targetBody.children).filter(c =>
+            c.classList.contains('bm-slot')
+        );
+
+        const addSlot = targetBody.querySelector('.bm-slot-add');
+        const clamped = Math.max(0, Math.min(insertIndex, bookmarkSlots.length));
+
+        if (clamped >= bookmarkSlots.length) {
+            targetBody.insertBefore(placeholder, addSlot || null);
+        } else {
+            targetBody.insertBefore(placeholder, bookmarkSlots[clamped]);
+        }
+    }
+
+    function onDragEnd(e) {
+        document.removeEventListener('pointermove',   onDragMove);
+        document.removeEventListener('pointerup',     onDragEnd);
+        document.removeEventListener('pointercancel', onDragCancel);
+
+        if (!dragState) return;
+
+        if (!dragState.started) {
+            // Threshold not crossed — treat as plain click, restore state
+            dragState = null;
+            return;
+        }
+
+        const { bookmarkId, fromGroupId, lastGroupId, lastInsertIndex } = dragState;
+
+        dragState.ghostEl.remove();
+        dragState.placeholderEl.remove();
+        dragState = null;
+
+        if (lastGroupId !== null && lastInsertIndex >= 0) {
+            commitDragMove(bookmarkId, fromGroupId, lastGroupId, lastInsertIndex);
+        } else {
+            renderAdvancedBookmarks();
+        }
+    }
+
+    function onDragCancel() {
+        document.removeEventListener('pointermove',   onDragMove);
+        document.removeEventListener('pointerup',     onDragEnd);
+        document.removeEventListener('pointercancel', onDragCancel);
+
+        if (dragState) {
+            if (dragState.ghostEl)       dragState.ghostEl.remove();
+            if (dragState.placeholderEl) dragState.placeholderEl.remove();
+            dragState = null;
+        }
+        renderAdvancedBookmarks();
+    }
+
+    function commitDragMove(bookmarkId, fromGroupId, toGroupId, insertIndex) {
+        const fromGroup = config.groups.find(g => g.id === fromGroupId);
+        if (!fromGroup) { renderAdvancedBookmarks(); return; }
+
+        const bmIdx = fromGroup.bookmarks.findIndex(b => b.id === bookmarkId);
+        if (bmIdx < 0) { renderAdvancedBookmarks(); return; }
+
+        const [bm] = fromGroup.bookmarks.splice(bmIdx, 1);
+
+        if (fromGroupId === toGroupId) {
+            // insertIndex is relative to the (n-1) remaining items after splice
+            const clamped = Math.max(0, Math.min(insertIndex, fromGroup.bookmarks.length));
+            fromGroup.bookmarks.splice(clamped, 0, bm);
+        } else {
+            const toGroup = config.groups.find(g => g.id === toGroupId);
+            if (!toGroup) {
+                fromGroup.bookmarks.splice(bmIdx, 0, bm); // restore
+                renderAdvancedBookmarks();
+                return;
+            }
+            const clamped = Math.max(0, Math.min(insertIndex, toGroup.bookmarks.length));
+            toGroup.bookmarks.splice(clamped, 0, bm);
+        }
+
+        saveConfig();
+        renderAdvancedBookmarks();
     }
 
     // ── ESC key integration ────────────────────────────────────
