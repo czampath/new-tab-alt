@@ -57,6 +57,7 @@
     padding: 14px 8px;
     min-height: 84px;   /* matches icon(36) + gap(6) + name(~14) + padding(14×2) */
     animation: popIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    box-sizing: content-box;
 }
 
 .bm-slot:hover {
