@@ -223,6 +223,7 @@ Inside the settings panel, a new toggle:
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  box-sizing: content-box;
 }
 .bm-slot:hover { background: rgba(255,255,255,0.22); transform: translateY(-2px); }
 
