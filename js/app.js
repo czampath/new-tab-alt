@@ -200,7 +200,7 @@ function updateWeatherDisplay(weatherData) {
     const weatherEl = document.getElementById('weather');
     if (!weatherData) {
         if (!settings.weatherApiKey) {
-            weatherEl.innerHTML = '<span style="opacity: 0.7; font-size: 13px;">Configure API key in settings</span>';
+            weatherEl.innerHTML = '<span style="opacity: 0.7; font-size: 13px;">Configure API key in settings to show weather</span>';
         } else {
             weatherEl.innerHTML = '<span style="opacity: 0.7; font-size: 13px;">Set location in settings</span>';
         }

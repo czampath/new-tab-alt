@@ -29,6 +29,7 @@
         background: 'rgba(255,255,255,0.08)',
         border: DEFAULT_BORDER(),
         padding: 10,
+        iconOverride: { enabled: false, bgColor: '#667eea', letter: '', letterColor: '#ffffff' },
         bookmarks: []
     });
 
@@ -67,6 +68,7 @@
                         if (g.padding === undefined) g.padding = 10;
                         if (g.slotSize === undefined) g.slotSize = 'medium';
                         if (g.showBookmarkNames === undefined) g.showBookmarkNames = true;
+                        if (!g.iconOverride) g.iconOverride = { enabled: false, bgColor: '#667eea', letter: '', letterColor: '#ffffff' };
                         if (!Array.isArray(g.bookmarks)) g.bookmarks = [];
                         g.bookmarks.forEach(b => {
                             if (!b.id) b.id = generateId();
@@ -265,7 +267,7 @@
         body.style.setProperty('--bm-group-slots', slots);
 
         group.bookmarks.forEach((bm, bmIdx) => {
-            body.appendChild(createBookmarkSlot(bm, group.id, showFavicons, bmIdx));
+            body.appendChild(createBookmarkSlot(bm, group.id, showFavicons, bmIdx, group.iconOverride));
         });
 
         // Add-bookmark slot
@@ -305,7 +307,14 @@
         return parts.join('; ');
     }
 
-    function createBookmarkSlot(bm, groupId, showFavicons, bmIdx) {
+    // Priority: individual bookmark override > group override > null (auto)
+    function resolveIconStyle(bm, groupIconOverride) {
+        if (bm.iconOverride && bm.iconOverride.enabled) return bm.iconOverride;
+        if (groupIconOverride && groupIconOverride.enabled) return groupIconOverride;
+        return null;
+    }
+
+    function createBookmarkSlot(bm, groupId, showFavicons, bmIdx, iconOverride) {
         const slot = document.createElement('a');
         slot.className = 'bm-slot';
         slot.href = safeUrl(bm.url);
@@ -315,15 +324,26 @@
         const iconEl = document.createElement('span');
         iconEl.className = 'bm-slot-icon';
 
+        const resolved = resolveIconStyle(bm, iconOverride);
         if (showFavicons) {
             const img = document.createElement('img');
             img.src = safeFaviconUrl(bm.url);
             img.alt = bm.title;
             img.onerror = function () {
-                this.parentElement.textContent = bm.iconLetter || '?';
-                this.parentElement.style.background = 'hsl(' + (bm.iconHue || 200) + ',60%,42%)';
+                if (resolved) {
+                    this.parentElement.textContent = resolved.letter || bm.iconLetter || '?';
+                    this.parentElement.style.background = resolved.bgColor;
+                    if (resolved.letterColor) this.parentElement.style.color = resolved.letterColor;
+                } else {
+                    this.parentElement.textContent = bm.iconLetter || '?';
+                    this.parentElement.style.background = 'hsl(' + (bm.iconHue || 200) + ',60%,42%)';
+                }
             };
             iconEl.appendChild(img);
+        } else if (resolved) {
+            iconEl.style.background = resolved.bgColor;
+            iconEl.textContent = resolved.letter || bm.iconLetter || '?';
+            iconEl.style.color = resolved.letterColor || '';
         } else {
             iconEl.style.background = 'hsl(' + (bm.iconHue || 200) + ',60%,42%)';
             iconEl.textContent = bm.iconLetter || '?';
@@ -373,6 +393,33 @@
                     '<label for="advBmMoveGroup">Move to Group</label>' +
                     '<select id="advBmMoveGroup"></select>' +
                 '</div>' +
+                '<hr style="border:none;border-top:1px solid #f0f0f0;margin:4px 0 14px">' +
+                '<div style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#aaa;margin-bottom:12px">Icon Override</div>' +
+                '<div class="form-group" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">' +
+                    '<label for="advBmIconOverride" style="margin-bottom:0">Custom Icon</label>' +
+                    '<label class="toggle-switch">' +
+                        '<input type="checkbox" id="advBmIconOverride">' +
+                        '<span class="toggle-slider"></span>' +
+                    '</label>' +
+                '</div>' +
+                '<div id="advBmIconOverrideDetails" style="display:none">' +
+                    '<div class="form-group">' +
+                        '<label>Icon Background</label>' +
+                        '<div class="bm-color-row">' +
+                            '<input type="color" id="advBmIconBgColor" value="#667eea">' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="form-group">' +
+                        '<label for="advBmIconLetter">Character <span style="font-weight:400;color:#bbb">(empty = auto from URL)</span></label>' +
+                        '<input type="text" id="advBmIconLetter" maxlength="8" placeholder="auto" style="width:80px">' +
+                    '</div>' +
+                    '<div class="form-group">' +
+                        '<label>Character Color</label>' +
+                        '<div class="bm-color-row">' +
+                            '<input type="color" id="advBmIconLetterColor" value="#ffffff">' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
                 '<div class="modal-buttons">' +
                     '<button class="modal-btn danger" id="advBmDeleteBtn" style="display:none">Delete</button>' +
                     '<div style="flex:1"></div>' +
@@ -400,6 +447,11 @@
             document.getElementById(id).addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') saveAdvancedBookmark();
             });
+        });
+
+        document.getElementById('advBmIconOverride').addEventListener('change', () => {
+            const enabled = document.getElementById('advBmIconOverride').checked;
+            document.getElementById('advBmIconOverrideDetails').style.display = enabled ? '' : 'none';
         });
     }
 
@@ -432,12 +484,27 @@
             } else {
                 moveRow.classList.remove('visible');
             }
+
+            const io = bm.iconOverride || { enabled: false, bgColor: '#667eea', letter: '', letterColor: '#ffffff' };
+            document.getElementById('advBmIconOverride').checked = io.enabled;
+            document.getElementById('advBmIconOverrideDetails').style.display = io.enabled ? '' : 'none';
+            const ioBgParsed = parseRgba(io.bgColor || '#667eea');
+            document.getElementById('advBmIconBgColor').value = rgbToHex(ioBgParsed.r, ioBgParsed.g, ioBgParsed.b);
+            document.getElementById('advBmIconLetter').value = io.letter || '';
+            const ioLetterParsed = parseRgba(io.letterColor || '#ffffff');
+            document.getElementById('advBmIconLetterColor').value = rgbToHex(ioLetterParsed.r, ioLetterParsed.g, ioLetterParsed.b);
         } else {
             titleEl.textContent = 'Add Bookmark';
             titleInput.value = '';
             urlInput.value = '';
             deleteBtn.style.display = 'none';
             moveRow.classList.remove('visible');
+
+            document.getElementById('advBmIconOverride').checked = false;
+            document.getElementById('advBmIconOverrideDetails').style.display = 'none';
+            document.getElementById('advBmIconBgColor').value = '#667eea';
+            document.getElementById('advBmIconLetter').value = '';
+            document.getElementById('advBmIconLetterColor').value = '#ffffff';
         }
 
         const overlay = document.getElementById('advancedBookmarkModal');
@@ -476,6 +543,13 @@
         const { iconHue, iconLetter } = computeIconData(sanitized);
         const { groupId, bookmarkId } = activeModalContext;
 
+        const iconOverride = {
+            enabled: document.getElementById('advBmIconOverride').checked,
+            bgColor: document.getElementById('advBmIconBgColor').value,
+            letter: document.getElementById('advBmIconLetter').value.trim(),
+            letterColor: document.getElementById('advBmIconLetterColor').value
+        };
+
         if (bookmarkId) {
             const moveRow = document.getElementById('bmGroupMoveRow');
             const moveSelect = document.getElementById('advBmMoveGroup');
@@ -483,12 +557,12 @@
                 ? moveSelect.value
                 : groupId;
 
-            updateBookmarkInGroup(groupId, bookmarkId, { title, url: sanitized, iconHue, iconLetter });
+            updateBookmarkInGroup(groupId, bookmarkId, { title, url: sanitized, iconHue, iconLetter, iconOverride });
             if (targetGroupId !== groupId) {
                 moveBookmark(groupId, targetGroupId, bookmarkId);
             }
         } else {
-            addBookmarkToGroup(groupId, { title, url: sanitized, iconHue, iconLetter });
+            addBookmarkToGroup(groupId, { title, url: sanitized, iconHue, iconLetter, iconOverride });
         }
 
         closeAdvancedBookmarkModal();
@@ -747,6 +821,34 @@
                         '<label>Inner Padding: <span id="bmEdPaddingLabel">10px</span></label>' +
                         '<input type="range" id="bmEdPadding" min="0" max="28" value="10" style="width:100%;accent-color:#667eea;">' +
                     '</div>' +
+
+                    '<hr class="bm-editor-divider">' +
+                    '<div class="bm-editor-section-label">Icon Style Override</div>' +
+                    '<div class="bm-editor-toggle-row">' +
+                        '<label>Override Icon Style</label>' +
+                        '<label class="toggle-switch">' +
+                            '<input type="checkbox" id="bmEdIconOverride">' +
+                            '<span class="toggle-slider"></span>' +
+                        '</label>' +
+                    '</div>' +
+                    '<div id="bmEdIconOverrideDetails" style="display:none">' +
+                        '<div class="bm-editor-row">' +
+                            '<label>Icon Background</label>' +
+                            '<div class="bm-color-row">' +
+                                '<input type="color" id="bmEdIconBgColor" value="#667eea">' +
+                            '</div>' +
+                        '</div>' +
+                        '<div class="bm-editor-row">' +
+                            '<label for="bmEdIconLetter">Character <span style="font-weight:400;color:#bbb">(empty = auto from URL)</span></label>' +
+                            '<input type="text" id="bmEdIconLetter" maxlength="8" placeholder="auto" style="width:80px">' +
+                        '</div>' +
+                        '<div class="bm-editor-row">' +
+                            '<label>Character Color</label>' +
+                            '<div class="bm-color-row">' +
+                                '<input type="color" id="bmEdIconLetterColor" value="#ffffff">' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>' +
                 '</div>' +
                 '<div class="bm-editor-footer">' +
                     '<button class="bm-editor-cancel-btn" id="bmEdCancelBtn">Cancel</button>' +
@@ -796,6 +898,11 @@
             document.getElementById('bmEdPaddingLabel').textContent =
                 document.getElementById('bmEdPadding').value + 'px';
         });
+
+        document.getElementById('bmEdIconOverride').addEventListener('change', () => {
+            const enabled = document.getElementById('bmEdIconOverride').checked;
+            document.getElementById('bmEdIconOverrideDetails').style.display = enabled ? '' : 'none';
+        });
     }
 
     function openGroupEditor(groupId) {
@@ -838,6 +945,15 @@
         document.getElementById('bmEdPadding').value = padding;
         document.getElementById('bmEdPaddingLabel').textContent = padding + 'px';
 
+        const io = g.iconOverride || { enabled: false, bgColor: '#667eea', letter: '', letterColor: '#ffffff' };
+        document.getElementById('bmEdIconOverride').checked = io.enabled;
+        document.getElementById('bmEdIconOverrideDetails').style.display = io.enabled ? '' : 'none';
+        const ioBgParsed = parseRgba(io.bgColor || '#667eea');
+        document.getElementById('bmEdIconBgColor').value = rgbToHex(ioBgParsed.r, ioBgParsed.g, ioBgParsed.b);
+        document.getElementById('bmEdIconLetter').value = io.letter || '';
+        const ioLetterParsed = parseRgba(io.letterColor || '#ffffff');
+        document.getElementById('bmEdIconLetterColor').value = rgbToHex(ioLetterParsed.r, ioLetterParsed.g, ioLetterParsed.b);
+
         updateSlotsPreview();
 
         const overlay = document.getElementById('bmEditorOverlay');
@@ -878,6 +994,11 @@
         const borderRadius = parseInt(document.getElementById('bmEdRadius').value, 10);
         const padding = parseInt(document.getElementById('bmEdPadding').value, 10);
 
+        const iconOverrideEnabled = document.getElementById('bmEdIconOverride').checked;
+        const iconBgColor = document.getElementById('bmEdIconBgColor').value;
+        const iconLetter = document.getElementById('bmEdIconLetter').value.trim();
+        const iconLetterColor = document.getElementById('bmEdIconLetterColor').value;
+
         const patch = {
             name, showName, maxSlots, slotSize, showBookmarkNames, background,
             border: {
@@ -886,7 +1007,13 @@
                 color: 'rgba(' + bcRgb.r + ',' + bcRgb.g + ',' + bcRgb.b + ',1)',
                 radius: borderRadius
             },
-            padding
+            padding,
+            iconOverride: {
+                enabled: iconOverrideEnabled,
+                bgColor: iconBgColor,
+                letter: iconLetter,
+                letterColor: iconLetterColor
+            }
         };
 
         if (editingGroupId) {
