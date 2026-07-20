@@ -14,6 +14,11 @@
     const QUAKE_HOLD_MS = 5000;
     const QUAKE_BUILD_MS = 40000;
     const QUAKE_EXPLODE_MS = 400;
+    const QUAKE_SECTION_GLITCH_DURATION_MS = 360;
+    const QUAKE_ENTRY_RAMP_MS = 1600;
+    const QUAKE_CORROSION_RAMP_MS = 10000;
+    const QUAKE_CORROSION_HINT_AT_MS = 20000;
+    const QUAKE_CORROSION_HINT_SPAN_MS = 140;
 
     const DEFAULT_BORDER = () => ({
         style: 'none',
@@ -50,6 +55,7 @@
     let dragState = null;  // active drag context; null when idle
     const quakeStates = new Map(); // key: .bm-slot-icon element
     let quakeRafId = 0;
+    let corrosionFilterReady = false;
 
     // ── ID generation ─────────────────────────────────────────
     function generateId() {
@@ -1166,7 +1172,16 @@
         const slot = e.target.closest('.bm-slot');
         if (!slot) return;
         if (e.relatedTarget && slot.contains(e.relatedTarget)) return;
+
+        const icon = slot.querySelector('.bm-slot-icon');
+        const state = icon ? quakeStates.get(icon) : null;
+        const explodedGone = !!icon && (icon.classList.contains('bm-quake-gone') || (state && state.gone));
         stopSlotQuake(slot);
+        if (explodedGone) {
+            const section = slot.closest('.bookmarks-section');
+            spawnBookmarksSectionGlitch(icon, state ? state.seed : Math.random() * 10000);
+            spawnBookmarksSectionGlitch(section, state ? state.seed : Math.random() * 10000);
+        }
     }
 
     function startSlotQuake(slot) {
@@ -1174,13 +1189,15 @@
         if (!icon) return;
 
         stopSlotQuake(slot);
+        ensureCorrosionFilter();
 
         const now = performance.now();
         quakeStates.set(icon, {
             slot,
             startMs: now,
             seed: Math.random() * 10000,
-            gone: false
+            gone: false,
+            rippleTriggered: false
         });
 
         icon.classList.add('bm-quake-active');
@@ -1216,11 +1233,81 @@
         icon.style.filter = '';
         icon.style.opacity = '';
         icon.style.boxShadow = '';
+        icon.style.clipPath = '';
+        icon.style.removeProperty('--bm-corrosion-opacity');
+        icon.style.removeProperty('--bm-corrosion-shift-x');
+        icon.style.removeProperty('--bm-corrosion-shift-y');
+        icon.style.removeProperty('--bm-corrosion-rot');
+        icon.style.removeProperty('--bm-corrosion-scale');
+        icon.style.removeProperty('--bm-corrosion-bite-a');
+        icon.style.removeProperty('--bm-corrosion-bite-b');
+        icon.style.removeProperty('--bm-corrosion-bite-c');
+        icon.style.removeProperty('--bm-corrosion-bite-d');
+        icon.style.removeProperty('--bm-corrosion-bite-e');
+        icon.style.removeProperty('--bm-corrosion-bite-f');
+    }
+
+    function ensureCorrosionFilter() {
+        if (corrosionFilterReady) return;
+        if (document.getElementById('bmQuakeFxDefs')) {
+            corrosionFilterReady = true;
+            return;
+        }
+
+        const svgNs = 'http://www.w3.org/2000/svg';
+        const svg = document.createElementNS(svgNs, 'svg');
+        svg.setAttribute('id', 'bmQuakeFxDefs');
+        svg.setAttribute('aria-hidden', 'true');
+        svg.style.position = 'absolute';
+        svg.style.width = '0';
+        svg.style.height = '0';
+        svg.style.overflow = 'hidden';
+
+        const filter = document.createElementNS(svgNs, 'filter');
+        filter.setAttribute('id', 'bmQuakeCorrosion');
+        filter.setAttribute('x', '-30%');
+        filter.setAttribute('y', '-30%');
+        filter.setAttribute('width', '160%');
+        filter.setAttribute('height', '160%');
+
+        const noise = document.createElementNS(svgNs, 'feTurbulence');
+        noise.setAttribute('type', 'fractalNoise');
+        noise.setAttribute('baseFrequency', '0.95');
+        noise.setAttribute('numOctaves', '2');
+        noise.setAttribute('seed', '17');
+        noise.setAttribute('result', 'noise');
+
+        const warp = document.createElementNS(svgNs, 'feDisplacementMap');
+        warp.setAttribute('in', 'SourceGraphic');
+        warp.setAttribute('in2', 'noise');
+        warp.setAttribute('scale', '8');
+        warp.setAttribute('xChannelSelector', 'R');
+        warp.setAttribute('yChannelSelector', 'G');
+
+        filter.appendChild(noise);
+        filter.appendChild(warp);
+        svg.appendChild(filter);
+        document.body.appendChild(svg);
+
+        corrosionFilterReady = true;
     }
 
     function ensureQuakeLoop() {
         if (quakeRafId) return;
         quakeRafId = requestAnimationFrame(runQuakeFrame);
+    }
+
+    function clamp01(value) {
+        return Math.max(0, Math.min(1, value));
+    }
+
+    function smoothStep(value) {
+        const t = clamp01(value);
+        return t * t * (3 - 2 * t);
+    }
+
+    function lerp(from, to, amount) {
+        return from + ((to - from) * amount);
     }
 
     function runQuakeFrame(now) {
@@ -1255,6 +1342,10 @@
 
             const explodeElapsed = tremorElapsed - QUAKE_BUILD_MS;
             if (explodeElapsed < QUAKE_EXPLODE_MS) {
+                if (!state.rippleTriggered) {
+                    state.rippleTriggered = true;
+                    spawnExplosionRipple(icon, state.seed);
+                }
                 applyQuakeExplosion(icon, explodeElapsed, state.seed);
                 return;
             }
@@ -1277,9 +1368,92 @@
         quakeRafId = requestAnimationFrame(runQuakeFrame);
     }
 
+    function spawnExplosionRipple(icon, seed) {
+        const rect = icon.getBoundingClientRect();
+        const cx = rect.left + (rect.width / 2);
+        const cy = rect.top + (rect.height / 2);
+
+        const ripple = document.createElement('div');
+        ripple.className = 'bm-explosion-ripple';
+        ripple.style.left = cx.toFixed(2) + 'px';
+        ripple.style.top = cy.toFixed(2) + 'px';
+        ripple.style.setProperty('--bm-ripple-hue', String(Math.floor((seed % 80) + 180)));
+        ripple.style.setProperty('--bm-ripple-size', Math.max(180, Math.min(window.innerWidth, window.innerHeight) * 0.55).toFixed(2) + 'px');
+
+        document.body.appendChild(ripple);
+
+        const remove = () => {
+            if (ripple.parentNode) ripple.parentNode.removeChild(ripple);
+        };
+
+        ripple.addEventListener('animationend', remove, { once: true });
+        setTimeout(remove, 2800);
+    }
+
+    function spawnBookmarksSectionGlitch(sectionEl, seed) {
+        if (!sectionEl || !sectionEl.isConnected) return;
+        const sectionRect = sectionEl.getBoundingClientRect();
+        if (sectionRect.width < 2 || sectionRect.height < 2) return;
+
+        const layer = document.createElement('div');
+        layer.className = 'bm-explosion-glitch-layer';
+
+        const clones = [];
+        const colorClasses = ['bm-explosion-glitch-red', 'bm-explosion-glitch-cyan', 'bm-explosion-glitch-raw'];
+
+        for (let i = 0; i < 3; i++) {
+            const clone = document.createElement('div');
+            clone.className = 'bm-explosion-glitch-clone ' + colorClasses[i];
+            const sectionClone = sectionEl.cloneNode(true);
+            sectionClone.removeAttribute('id');
+            sectionClone.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
+
+            clone.style.left = sectionRect.left.toFixed(2) + 'px';
+            clone.style.top = sectionRect.top.toFixed(2) + 'px';
+            clone.style.width = sectionRect.width.toFixed(2) + 'px';
+            clone.style.height = sectionRect.height.toFixed(2) + 'px';
+            clone.style.transform = 'translate(0,0)';
+
+            sectionClone.style.margin = '0';
+            sectionClone.style.width = sectionRect.width.toFixed(2) + 'px';
+            sectionClone.style.maxWidth = 'none';
+            sectionClone.style.minWidth = '0';
+
+            clone.appendChild(sectionClone);
+            layer.appendChild(clone);
+            clones.push(clone);
+        }
+
+        document.body.appendChild(layer);
+
+        const maxShift = Math.max(16, Math.min(52, Math.min(window.innerWidth, window.innerHeight) * 0.045));
+        const interval = setInterval(() => {
+            const now = performance.now() * 0.001;
+            clones.forEach((clone, i) => {
+                const clipTop = Math.random() * 88;
+                const clipBottom = Math.max(0, 100 - (clipTop + (Math.random() * 26)));
+                const dx = (Math.random() - 0.5) * maxShift;
+                const dy = (Math.random() > 0.75) ? (Math.random() - 0.5) * 11 : 0;
+                const skew = Math.sin((now * 35) + seed + i) * 4.8;
+
+                clone.style.clipPath = 'inset(' + clipTop.toFixed(2) + '% 0 ' + clipBottom.toFixed(2) + '% 0)';
+                clone.style.transform =
+                    'translate(' + dx.toFixed(2) + 'px, ' + dy.toFixed(2) + 'px) skewX(' + skew.toFixed(2) + 'deg)';
+            });
+        }, 36);
+
+        const cleanup = () => {
+            clearInterval(interval);
+            if (layer.parentNode) layer.parentNode.removeChild(layer);
+        };
+
+        setTimeout(cleanup, QUAKE_SECTION_GLITCH_DURATION_MS);
+    }
+
     function applyQuakeBuild(icon, tremorElapsed, seed) {
         const t = Math.min(1, tremorElapsed / QUAKE_BUILD_MS);
         const ts = tremorElapsed / 1000;
+        const entry = smoothStep(tremorElapsed / QUAKE_ENTRY_RAMP_MS);
         const ramp = Math.pow(t, 2.2);
         const ampPx = 0.08 + (0.45 * t) + (10.5 * ramp);
         const rotAmp = 0.03 + (0.2 * t) + (6.4 * ramp);
@@ -1311,25 +1485,80 @@
         const pulse = Math.pow(Math.max(0, Math.sin((ts * (2.1 + t * 4.6)) + seed * 0.013)), 6);
         const pulseBoost = 1 + pulse * (0.15 + t * 0.55);
 
+        // Corrosion cue: split-second glitch hint at build second 20.
+        const hintDist = Math.abs(tremorElapsed - QUAKE_CORROSION_HINT_AT_MS);
+        const hintRaw = Math.max(0, 1 - (hintDist / QUAKE_CORROSION_HINT_SPAN_MS));
+        const corrosionHint = Math.pow(hintRaw, 2.4);
+
+        // Final 10s of build progressively corrode the icon.
+        const corrosionStart = QUAKE_BUILD_MS - QUAKE_CORROSION_RAMP_MS;
+        const corrosionRamp = Math.max(0, Math.min(1, (tremorElapsed - corrosionStart) / QUAKE_CORROSION_RAMP_MS));
+        const corrosionLevel = Math.max(corrosionHint, corrosionRamp);
+
+        const buildX = x * pulseBoost;
+        const buildY = y * pulseBoost;
+        const buildRot = rot * pulseBoost;
+        const buildScale = scale + pulse * 0.06 + corrosionLevel * 0.025;
         icon.style.transform =
-            'translate3d(' + (x * pulseBoost).toFixed(3) + 'px,' + (y * pulseBoost).toFixed(3) + 'px,0) ' +
-            'rotate(' + (rot * pulseBoost).toFixed(3) + 'deg) ' +
-            'scale(' + (scale + pulse * 0.06).toFixed(4) + ')';
+            'translate3d(' + lerp(0, buildX, entry).toFixed(3) + 'px,' + lerp(0, buildY, entry).toFixed(3) + 'px,0) ' +
+            'rotate(' + lerp(0, buildRot, entry).toFixed(3) + 'deg) ' +
+            'scale(' + lerp(1.06, buildScale, entry).toFixed(4) + ')';
 
         icon.style.filter =
-            'saturate(' + (1 + 0.32 * t).toFixed(3) + ') ' +
-            'contrast(' + (1 + 0.24 * t).toFixed(3) + ') ' +
-            'brightness(' + (1 + 0.12 * t).toFixed(3) + ')';
+            'saturate(' + lerp(1, 1 + 0.18 * t + 0.28 * corrosionLevel, entry).toFixed(3) + ') ' +
+            'contrast(' + lerp(1, 1 + 0.16 * t + 0.2 * corrosionLevel, entry).toFixed(3) + ') ' +
+            'brightness(' + lerp(1, 1 + 0.1 * t - 0.06 * corrosionLevel, entry).toFixed(3) + ')';
 
-        icon.style.opacity = (1 - (0.03 * Math.pow(t, 3))).toFixed(3);
+        icon.style.opacity = lerp(1, 1 - (0.015 * Math.pow(t, 3)) - (0.025 * corrosionLevel), entry).toFixed(3);
 
-        const glowA = (0.21 + 0.26 * t).toFixed(3);
-        const glowB = (0.27 + 0.25 * t).toFixed(3);
-        const spread = (1 + 3.2 * t).toFixed(2);
-        const blur = (5 + 13 * t).toFixed(2);
-        icon.style.boxShadow =
+        icon.style.setProperty('--bm-corrosion-opacity', lerp(0, Math.min(1, 0.03 + corrosionLevel * 1.12), entry).toFixed(3));
+        icon.style.setProperty('--bm-corrosion-shift-x', lerp(0, Math.sin((ts * (7 + corrosionLevel * 22)) + seed * 0.021) * (0.5 + corrosionLevel * 7), entry).toFixed(3) + 'px');
+        icon.style.setProperty('--bm-corrosion-shift-y', lerp(0, Math.cos((ts * (9 + corrosionLevel * 26)) + seed * 0.037) * (0.4 + corrosionLevel * 6), entry).toFixed(3) + 'px');
+        icon.style.setProperty('--bm-corrosion-rot', lerp(0, Math.sin((ts * (8 + corrosionLevel * 21)) + seed * 0.013) * (0.4 + corrosionLevel * 5), entry).toFixed(3) + 'deg');
+        icon.style.setProperty('--bm-corrosion-scale', lerp(0, corrosionLevel * 0.3 + pulse * 0.06, entry).toFixed(4));
+
+        const edgeNoise = Math.sin((ts * (11 + corrosionLevel * 37)) + seed * 0.071) * 0.8 +
+                  Math.sin((ts * (17 + corrosionLevel * 41)) + seed * 0.137) * 0.5 +
+                  Math.sin((ts * (23 + corrosionLevel * 53)) + seed * 0.193) * 0.32;
+        const biteA = Math.max(0, 1.2 + corrosionLevel * 44 + Math.abs(edgeNoise) * 6.8);
+        const biteB = Math.max(0, 1.5 + corrosionLevel * 38 + Math.abs(Math.cos(edgeNoise * 1.2)) * 5.9);
+        const biteC = Math.max(0, 0.9 + corrosionLevel * 41 + Math.abs(Math.sin(edgeNoise * 1.7)) * 6.4);
+        const biteD = Math.max(0, 1.1 + corrosionLevel * 46 + Math.abs(Math.cos(edgeNoise * 1.3)) * 6.1);
+        const biteE = Math.max(0, 2.2 + corrosionLevel * 27 + Math.abs(edgeNoise) * 4.8);
+        const biteF = Math.max(20, 48 + Math.sin(ts * 13 + seed * 0.05) * (1.4 + corrosionLevel * 18));
+        icon.style.setProperty('--bm-corrosion-bite-a', biteA.toFixed(2));
+        icon.style.setProperty('--bm-corrosion-bite-b', biteB.toFixed(2));
+        icon.style.setProperty('--bm-corrosion-bite-c', biteC.toFixed(2));
+        icon.style.setProperty('--bm-corrosion-bite-d', biteD.toFixed(2));
+        icon.style.setProperty('--bm-corrosion-bite-e', biteE.toFixed(2));
+        icon.style.setProperty('--bm-corrosion-bite-f', biteF.toFixed(2));
+
+        const glowA = lerp(0.21, 0.21 + 0.26 * t + 0.12 * corrosionLevel, entry).toFixed(3);
+        const glowB = lerp(0.27, 0.27 + 0.25 * t + 0.2 * corrosionLevel, entry).toFixed(3);
+        const spread = lerp(1, 1 + 3.2 * t + 2.4 * corrosionLevel, entry).toFixed(2);
+        const blur = lerp(5, 5 + 13 * t + 10 * corrosionLevel, entry).toFixed(2);
+        const baseShadow =
             '0 0 1px ' + spread + 'px rgba(255,255,255,' + glowA + '), ' +
-            '0 0 ' + blur + 'px ' + (2 + 5.5 * t).toFixed(2) + 'px rgba(0,0,0,' + glowB + ')';
+            '0 0 ' + blur + 'px ' + lerp(2, 2 + 5.5 * t, entry).toFixed(2) + 'px rgba(0,0,0,' + glowB + ')';
+
+        // Keep 5s handoff visually seamless: extra decay shadows fade in only with corrosion progress.
+        const extraBlend = smoothStep(entry * corrosionLevel);
+        if (extraBlend > 0.001) {
+            const rustBlur = lerp(0, 12 + corrosionLevel * 28, extraBlend).toFixed(2);
+            const rustSpread = lerp(0, 4 + corrosionLevel * 10, extraBlend).toFixed(2);
+            const rustAlpha = lerp(0, 0.1 + corrosionLevel * 0.7, extraBlend).toFixed(3);
+
+            const darkBlur = lerp(0, 16 + corrosionLevel * 26, extraBlend).toFixed(2);
+            const darkSpread = lerp(0, 7 + corrosionLevel * 12, extraBlend).toFixed(2);
+            const darkAlpha = lerp(0, 0.16 + corrosionLevel * 0.62, extraBlend).toFixed(3);
+
+            icon.style.boxShadow =
+                baseShadow + ', ' +
+                '0 0 ' + rustBlur + 'px ' + rustSpread + 'px rgba(92,48,22,' + rustAlpha + '), ' +
+                '0 0 ' + darkBlur + 'px ' + darkSpread + 'px rgba(31,19,12,' + darkAlpha + ')';
+        } else {
+            icon.style.boxShadow = baseShadow;
+        }
     }
 
     function applyQuakeExplosion(icon, explodeElapsed, seed) {
@@ -1352,6 +1581,7 @@
             'saturate(' + (1.35 + 0.95 * t).toFixed(3) + ') ' +
             'contrast(' + (1.2 + 0.42 * t).toFixed(3) + ') ' +
             'brightness(' + (1.1 + 0.34 * t).toFixed(3) + ') ' +
+            'sepia(' + (0.35 + 0.45 * t).toFixed(3) + ') ' +
             'blur(' + (0.4 + 4.2 * t).toFixed(3) + 'px)';
 
         icon.style.opacity = Math.max(0, 1 - Math.pow(t, 1.35)).toFixed(3);

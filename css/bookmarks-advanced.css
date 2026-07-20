@@ -91,14 +91,165 @@
 
 .bm-slot-icon.bm-quake-active {
     transition: none !important;
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
     transform-origin: 50% 50%;
     will-change: transform, filter, opacity, box-shadow;
+}
+
+.bm-slot-icon.bm-quake-active::before,
+.bm-slot-icon.bm-quake-active::after {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: 0;
+}
+
+.bm-slot-icon.bm-quake-active::before {
+    opacity: var(--bm-corrosion-opacity, 0);
+    transform:
+        translate3d(var(--bm-corrosion-shift-x, 0px), var(--bm-corrosion-shift-y, 0px), 0)
+        rotate(var(--bm-corrosion-rot, 0deg))
+        scale(calc(1 + var(--bm-corrosion-scale, 0)));
+    background:
+        radial-gradient(circle at 18% 16%, rgba(255, 214, 166, 0.18) 0 7%, transparent 8%),
+        radial-gradient(circle at 78% 26%, rgba(103, 58, 28, 0.9) 0 10%, transparent 11%),
+        radial-gradient(circle at 32% 68%, rgba(34, 20, 12, 0.96) 0 9%, transparent 10%),
+        radial-gradient(circle at 65% 78%, rgba(121, 47, 20, 0.82) 0 12%, transparent 13%),
+        radial-gradient(circle at 42% 42%, rgba(36, 44, 22, 0.5) 0 11%, transparent 12%),
+        radial-gradient(circle at 58% 38%, rgba(12, 12, 12, 0.9) 0 13%, transparent 14%),
+        repeating-linear-gradient(135deg,
+            rgba(16, 10, 8, 0.09) 0 2px,
+            rgba(120, 54, 29, 0.12) 2px 5px,
+            rgba(16, 10, 8, 0.08) 5px 8px,
+            transparent 8px 11px),
+        linear-gradient(180deg,
+            rgba(255, 226, 180, 0.22),
+            rgba(80, 34, 16, 0.58) 34%,
+            rgba(35, 17, 12, 0.9) 68%,
+            rgba(0, 0, 0, 0.98));
+    mix-blend-mode: multiply;
+    filter: url(#bmQuakeCorrosion) saturate(1.35) contrast(1.18) hue-rotate(-14deg);
+    clip-path: polygon(
+        calc(var(--bm-corrosion-bite-a, 0) * 1%) 0,
+        100% calc(var(--bm-corrosion-bite-b, 0) * 1%),
+        calc(100% - var(--bm-corrosion-bite-c, 0) * 1%) 100%,
+        0 calc(100% - var(--bm-corrosion-bite-d, 0) * 1%),
+        calc(var(--bm-corrosion-bite-e, 0) * 1%) calc(var(--bm-corrosion-bite-f, 50) * 1%)
+    );
+}
+
+.bm-slot-icon.bm-quake-active::after {
+    opacity: calc(var(--bm-corrosion-opacity, 0) * 0.92);
+    transform:
+        translate3d(calc(var(--bm-corrosion-shift-x, 0px) * -0.5), calc(var(--bm-corrosion-shift-y, 0px) * -0.5), 0)
+        rotate(calc(var(--bm-corrosion-rot, 0deg) * -0.55))
+        scale(calc(1 + var(--bm-corrosion-scale, 0) * 0.72));
+    background:
+        radial-gradient(circle at 22% 34%, rgba(255, 236, 198, 0.32) 0 2px, transparent 3px),
+        radial-gradient(circle at 61% 18%, rgba(255, 255, 255, 0.26) 0 1.4px, transparent 2.4px),
+        radial-gradient(circle at 74% 66%, rgba(0, 0, 0, 0.42) 0 2.8px, transparent 4px),
+        radial-gradient(circle at 36% 72%, rgba(92, 48, 22, 0.38) 0 2.6px, transparent 4px),
+        radial-gradient(circle at 52% 52%, rgba(18, 18, 18, 0.56) 0 17%, transparent 18%),
+        linear-gradient(135deg, transparent 0 36%, rgba(255, 244, 220, 0.16) 36% 46%, transparent 46% 52%, rgba(0, 0, 0, 0.18) 52% 63%, transparent 63% 100%);
+    mix-blend-mode: screen;
+    filter: blur(0.4px) saturate(1.35) contrast(1.2) hue-rotate(-18deg);
+    clip-path: polygon(
+        calc(100% - var(--bm-corrosion-bite-a, 0) * 1%) 0,
+        100% calc(100% - var(--bm-corrosion-bite-b, 0) * 1%),
+        calc(var(--bm-corrosion-bite-c, 0) * 1%) 100%,
+        0 calc(var(--bm-corrosion-bite-d, 0) * 1%),
+        calc(100% - var(--bm-corrosion-bite-e, 0) * 1%) calc(var(--bm-corrosion-bite-f, 50) * 1%)
+    );
 }
 
 .bm-slot-icon.bm-quake-gone {
     opacity: 0;
     filter: saturate(2) contrast(1.45) brightness(1.3) blur(4px);
     box-shadow: none !important;
+}
+
+/* Explosion shockwave emitted at the icon position */
+.bm-explosion-ripple {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 1500;
+    backdrop-filter: blur(7px) brightness(1.42) contrast(1.82);
+    -webkit-backdrop-filter: blur(7px) brightness(1.42) contrast(1.82);
+    box-shadow:
+        inset 0 0 20px hsla(var(--bm-ripple-hue, 200), 88%, 66%, 0.75),
+        0 0 14px hsla(var(--bm-ripple-hue, 200), 96%, 72%, 0.55);
+    animation: bm-ripple-expand 2s cubic-bezier(0.2, 0.68, 0.22, 1) forwards;
+    animation-delay: 350ms;
+}
+
+@keyframes bm-ripple-expand {
+    0% {
+        width: 0;
+        height: 0;
+        opacity: 1;
+        border: 3px solid hsla(var(--bm-ripple-hue, 200), 100%, 90%, 1);
+    }
+    100% {
+        width: var(--bm-ripple-size, 280px);
+        height: var(--bm-ripple-size, 280px);
+        opacity: 0;
+        border: 1px solid hsla(var(--bm-ripple-hue, 200), 100%, 74%, 0);
+        backdrop-filter: blur(0) brightness(1) contrast(1);
+        -webkit-backdrop-filter: blur(0) brightness(1) contrast(1);
+    }
+}
+
+/* Post-explosion digital glitch burst; fixed overlay avoids layout shift/scrollbars */
+.bm-explosion-glitch-layer {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 1550;
+    contain: layout paint style;
+}
+
+.bm-explosion-glitch-clone {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    transform-origin: center center;
+    will-change: transform, clip-path, filter;
+}
+
+.bm-explosion-glitch-clone img {
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    object-fit: contain;
+    display: block;
+}
+
+.bm-explosion-glitch-red {
+    filter: brightness(1.15) contrast(1.45) hue-rotate(-40deg) saturate(2.7);
+    mix-blend-mode: hard-light;
+    opacity: 0.78;
+}
+
+.bm-explosion-glitch-cyan {
+    filter: brightness(1.12) contrast(1.4) hue-rotate(125deg) saturate(2.6);
+    mix-blend-mode: hard-light;
+    opacity: 0.74;
+}
+
+.bm-explosion-glitch-raw {
+    filter: contrast(1.95) grayscale(1) brightness(1.05);
+    mix-blend-mode: screen;
+    opacity: 0.62;
 }
 
 .bm-slot-icon img {
