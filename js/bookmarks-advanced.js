@@ -11,6 +11,9 @@
     // ── Constants ─────────────────────────────────────────────
     const STORAGE_KEY = 'advancedBookmarksConfig';
     const DRAG_THRESHOLD = 6; // px movement before drag is committed
+    const QUAKE_HOLD_MS = 5000;
+    const QUAKE_BUILD_MS = 40000;
+    const QUAKE_EXPLODE_MS = 400;
 
     const DEFAULT_BORDER = () => ({
         style: 'none',
@@ -45,6 +48,8 @@
     let editingGroupId = null;
     let editMode = false;
     let dragState = null;  // active drag context; null when idle
+    const quakeStates = new Map(); // key: .bm-slot-icon element
+    let quakeRafId = 0;
 
     // ── ID generation ─────────────────────────────────────────
     function generateId() {
@@ -220,6 +225,7 @@
         const container = document.getElementById('advancedBookmarksContainer');
         if (!container) return;
 
+        clearAllSlotQuakes();
         container.innerHTML = '';
         container.style.setProperty('--bm-global-slots', config.globalMaxSlots);
 
@@ -332,8 +338,8 @@
             img.onerror = function () {
                 if (resolved) {
                     this.parentElement.textContent = resolved.letter || bm.iconLetter || '?';
-                    this.parentElement.style.background = resolved.bgColor;
-                    if (resolved.letterColor) this.parentElement.style.color = resolved.letterColor;
+                    this.parentElement.style.background = resolved.bgColor != null ? resolved.bgColor : 'hsl(' + (bm.iconHue || 200) + ',60%,42%)';
+                    if (resolved.letterColor != null) this.parentElement.style.color = resolved.letterColor;
                 } else {
                     this.parentElement.textContent = bm.iconLetter || '?';
                     this.parentElement.style.background = 'hsl(' + (bm.iconHue || 200) + ',60%,42%)';
@@ -341,9 +347,9 @@
             };
             iconEl.appendChild(img);
         } else if (resolved) {
-            iconEl.style.background = resolved.bgColor;
+            iconEl.style.background = resolved.bgColor != null ? resolved.bgColor : 'hsl(' + (bm.iconHue || 200) + ',60%,42%)';
             iconEl.textContent = resolved.letter || bm.iconLetter || '?';
-            iconEl.style.color = resolved.letterColor || '';
+            if (resolved.letterColor != null) iconEl.style.color = resolved.letterColor;
         } else {
             iconEl.style.background = 'hsl(' + (bm.iconHue || 200) + ',60%,42%)';
             iconEl.textContent = bm.iconLetter || '?';
@@ -404,20 +410,16 @@
                 '</div>' +
                 '<div id="advBmIconOverrideDetails" style="display:none">' +
                     '<div class="form-group">' +
-                        '<label>Icon Background</label>' +
-                        '<div class="bm-color-row">' +
-                            '<input type="color" id="advBmIconBgColor" value="#667eea">' +
-                        '</div>' +
+                        '<label style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">Icon Background<span class="bm-seg-control bm-seg-sm" id="advBmIconBgMode"><button data-val="auto" class="active">Auto</button><button data-val="custom">Custom</button></span></label>' +
+                        '<div id="advBmIconBgPicker" style="display:none"><div class="bm-color-row"><input type="color" id="advBmIconBgColor" value="#667eea"></div></div>' +
                     '</div>' +
                     '<div class="form-group">' +
                         '<label for="advBmIconLetter">Character <span style="font-weight:400;color:#bbb">(empty = auto from URL)</span></label>' +
                         '<input type="text" id="advBmIconLetter" maxlength="8" placeholder="auto" style="width:80px">' +
                     '</div>' +
                     '<div class="form-group">' +
-                        '<label>Character Color</label>' +
-                        '<div class="bm-color-row">' +
-                            '<input type="color" id="advBmIconLetterColor" value="#ffffff">' +
-                        '</div>' +
+                        '<label style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">Character Color<span class="bm-seg-control bm-seg-sm" id="advBmIconLetterColorMode"><button data-val="auto" class="active">Auto</button><button data-val="custom">Custom</button></span></label>' +
+                        '<div id="advBmIconLetterColorPicker" style="display:none"><div class="bm-color-row"><input type="color" id="advBmIconLetterColor" value="#ffffff"></div></div>' +
                     '</div>' +
                 '</div>' +
                 '<div class="modal-buttons">' +
@@ -452,6 +454,17 @@
         document.getElementById('advBmIconOverride').addEventListener('change', () => {
             const enabled = document.getElementById('advBmIconOverride').checked;
             document.getElementById('advBmIconOverrideDetails').style.display = enabled ? '' : 'none';
+        });
+
+        ['advBmIconBgMode', 'advBmIconLetterColorMode'].forEach(modeId => {
+            const pickerId = modeId === 'advBmIconBgMode' ? 'advBmIconBgPicker' : 'advBmIconLetterColorPicker';
+            document.getElementById(modeId).addEventListener('click', (e) => {
+                const btn = e.target.closest('button[data-val]');
+                if (!btn) return;
+                document.querySelectorAll('#' + modeId + ' button').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                document.getElementById(pickerId).style.display = btn.dataset.val === 'custom' ? '' : 'none';
+            });
         });
     }
 
@@ -488,11 +501,15 @@
             const io = bm.iconOverride || { enabled: false, bgColor: '#667eea', letter: '', letterColor: '#ffffff' };
             document.getElementById('advBmIconOverride').checked = io.enabled;
             document.getElementById('advBmIconOverrideDetails').style.display = io.enabled ? '' : 'none';
-            const ioBgParsed = parseRgba(io.bgColor || '#667eea');
-            document.getElementById('advBmIconBgColor').value = rgbToHex(ioBgParsed.r, ioBgParsed.g, ioBgParsed.b);
+            const bgAuto = io.bgColor == null;
+            document.querySelectorAll('#advBmIconBgMode button').forEach(b => b.classList.toggle('active', b.dataset.val === (bgAuto ? 'auto' : 'custom')));
+            document.getElementById('advBmIconBgPicker').style.display = bgAuto ? 'none' : '';
+            if (!bgAuto) { const p = parseRgba(io.bgColor); document.getElementById('advBmIconBgColor').value = rgbToHex(p.r, p.g, p.b); }
             document.getElementById('advBmIconLetter').value = io.letter || '';
-            const ioLetterParsed = parseRgba(io.letterColor || '#ffffff');
-            document.getElementById('advBmIconLetterColor').value = rgbToHex(ioLetterParsed.r, ioLetterParsed.g, ioLetterParsed.b);
+            const lcAuto = io.letterColor == null;
+            document.querySelectorAll('#advBmIconLetterColorMode button').forEach(b => b.classList.toggle('active', b.dataset.val === (lcAuto ? 'auto' : 'custom')));
+            document.getElementById('advBmIconLetterColorPicker').style.display = lcAuto ? 'none' : '';
+            if (!lcAuto) { const p = parseRgba(io.letterColor); document.getElementById('advBmIconLetterColor').value = rgbToHex(p.r, p.g, p.b); }
         } else {
             titleEl.textContent = 'Add Bookmark';
             titleInput.value = '';
@@ -502,9 +519,12 @@
 
             document.getElementById('advBmIconOverride').checked = false;
             document.getElementById('advBmIconOverrideDetails').style.display = 'none';
+            document.querySelectorAll('#advBmIconBgMode button').forEach(b => b.classList.toggle('active', b.dataset.val === 'custom'));
+            document.getElementById('advBmIconBgPicker').style.display = '';
             document.getElementById('advBmIconBgColor').value = '#667eea';
             document.getElementById('advBmIconLetter').value = '';
-            document.getElementById('advBmIconLetterColor').value = '#ffffff';
+            document.querySelectorAll('#advBmIconLetterColorMode button').forEach(b => b.classList.toggle('active', b.dataset.val === 'auto'));
+            document.getElementById('advBmIconLetterColorPicker').style.display = 'none';
         }
 
         const overlay = document.getElementById('advancedBookmarkModal');
@@ -545,9 +565,9 @@
 
         const iconOverride = {
             enabled: document.getElementById('advBmIconOverride').checked,
-            bgColor: document.getElementById('advBmIconBgColor').value,
+            bgColor: document.querySelector('#advBmIconBgMode button.active')?.dataset.val === 'auto' ? null : document.getElementById('advBmIconBgColor').value,
             letter: document.getElementById('advBmIconLetter').value.trim(),
-            letterColor: document.getElementById('advBmIconLetterColor').value
+            letterColor: document.querySelector('#advBmIconLetterColorMode button.active')?.dataset.val === 'auto' ? null : document.getElementById('advBmIconLetterColor').value
         };
 
         if (bookmarkId) {
@@ -833,20 +853,16 @@
                     '</div>' +
                     '<div id="bmEdIconOverrideDetails" style="display:none">' +
                         '<div class="bm-editor-row">' +
-                            '<label>Icon Background</label>' +
-                            '<div class="bm-color-row">' +
-                                '<input type="color" id="bmEdIconBgColor" value="#667eea">' +
-                            '</div>' +
+                            '<label style="display:flex;align-items:center;justify-content:space-between">Icon Background<span class="bm-seg-control bm-seg-sm" id="bmEdIconBgMode"><button data-val="auto" class="active">Auto</button><button data-val="custom">Custom</button></span></label>' +
+                            '<div id="bmEdIconBgPicker" style="display:none;margin-top:8px"><div class="bm-color-row"><input type="color" id="bmEdIconBgColor" value="#667eea"></div></div>' +
                         '</div>' +
                         '<div class="bm-editor-row">' +
                             '<label for="bmEdIconLetter">Character <span style="font-weight:400;color:#bbb">(empty = auto from URL)</span></label>' +
                             '<input type="text" id="bmEdIconLetter" maxlength="8" placeholder="auto" style="width:80px">' +
                         '</div>' +
                         '<div class="bm-editor-row">' +
-                            '<label>Character Color</label>' +
-                            '<div class="bm-color-row">' +
-                                '<input type="color" id="bmEdIconLetterColor" value="#ffffff">' +
-                            '</div>' +
+                            '<label style="display:flex;align-items:center;justify-content:space-between">Character Color<span class="bm-seg-control bm-seg-sm" id="bmEdIconLetterColorMode"><button data-val="auto" class="active">Auto</button><button data-val="custom">Custom</button></span></label>' +
+                            '<div id="bmEdIconLetterColorPicker" style="display:none;margin-top:8px"><div class="bm-color-row"><input type="color" id="bmEdIconLetterColor" value="#ffffff"></div></div>' +
                         '</div>' +
                     '</div>' +
                 '</div>' +
@@ -903,6 +919,17 @@
             const enabled = document.getElementById('bmEdIconOverride').checked;
             document.getElementById('bmEdIconOverrideDetails').style.display = enabled ? '' : 'none';
         });
+
+        ['bmEdIconBgMode', 'bmEdIconLetterColorMode'].forEach(modeId => {
+            const pickerId = modeId === 'bmEdIconBgMode' ? 'bmEdIconBgPicker' : 'bmEdIconLetterColorPicker';
+            document.getElementById(modeId).addEventListener('click', (e) => {
+                const btn = e.target.closest('button[data-val]');
+                if (!btn) return;
+                document.querySelectorAll('#' + modeId + ' button').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                document.getElementById(pickerId).style.display = btn.dataset.val === 'custom' ? '' : 'none';
+            });
+        });
     }
 
     function openGroupEditor(groupId) {
@@ -948,11 +975,15 @@
         const io = g.iconOverride || { enabled: false, bgColor: '#667eea', letter: '', letterColor: '#ffffff' };
         document.getElementById('bmEdIconOverride').checked = io.enabled;
         document.getElementById('bmEdIconOverrideDetails').style.display = io.enabled ? '' : 'none';
-        const ioBgParsed = parseRgba(io.bgColor || '#667eea');
-        document.getElementById('bmEdIconBgColor').value = rgbToHex(ioBgParsed.r, ioBgParsed.g, ioBgParsed.b);
+        const bgAuto = io.bgColor == null;
+        document.querySelectorAll('#bmEdIconBgMode button').forEach(b => b.classList.toggle('active', b.dataset.val === (bgAuto ? 'auto' : 'custom')));
+        document.getElementById('bmEdIconBgPicker').style.display = bgAuto ? 'none' : '';
+        if (!bgAuto) { const p = parseRgba(io.bgColor); document.getElementById('bmEdIconBgColor').value = rgbToHex(p.r, p.g, p.b); }
         document.getElementById('bmEdIconLetter').value = io.letter || '';
-        const ioLetterParsed = parseRgba(io.letterColor || '#ffffff');
-        document.getElementById('bmEdIconLetterColor').value = rgbToHex(ioLetterParsed.r, ioLetterParsed.g, ioLetterParsed.b);
+        const lcAuto = io.letterColor == null;
+        document.querySelectorAll('#bmEdIconLetterColorMode button').forEach(b => b.classList.toggle('active', b.dataset.val === (lcAuto ? 'auto' : 'custom')));
+        document.getElementById('bmEdIconLetterColorPicker').style.display = lcAuto ? 'none' : '';
+        if (!lcAuto) { const p = parseRgba(io.letterColor); document.getElementById('bmEdIconLetterColor').value = rgbToHex(p.r, p.g, p.b); }
 
         updateSlotsPreview();
 
@@ -995,9 +1026,9 @@
         const padding = parseInt(document.getElementById('bmEdPadding').value, 10);
 
         const iconOverrideEnabled = document.getElementById('bmEdIconOverride').checked;
-        const iconBgColor = document.getElementById('bmEdIconBgColor').value;
+        const iconBgColor = document.querySelector('#bmEdIconBgMode button.active')?.dataset.val === 'auto' ? null : document.getElementById('bmEdIconBgColor').value;
         const iconLetter = document.getElementById('bmEdIconLetter').value.trim();
-        const iconLetterColor = document.getElementById('bmEdIconLetterColor').value;
+        const iconLetterColor = document.querySelector('#bmEdIconLetterColorMode button.active')?.dataset.val === 'auto' ? null : document.getElementById('bmEdIconLetterColor').value;
 
         const patch = {
             name, showName, maxSlots, slotSize, showBookmarkNames, background,
@@ -1115,11 +1146,218 @@
         if (container.dataset.dragReady === '1') return;
         container.dataset.dragReady = '1';
         container.addEventListener('pointerdown', onSlotPointerDown);
+        container.addEventListener('mouseover', onSlotHoverStart);
+        container.addEventListener('mouseout', onSlotHoverEnd);
         // Prevent the browser's native HTML5 link-drag from hijacking pointer events
         // on <a> slot elements while in edit mode.
         container.addEventListener('dragstart', (e) => {
             if (editMode) e.preventDefault();
         });
+    }
+
+    function onSlotHoverStart(e) {
+        const slot = e.target.closest('.bm-slot');
+        if (!slot) return;
+        if (e.relatedTarget && slot.contains(e.relatedTarget)) return;
+        startSlotQuake(slot);
+    }
+
+    function onSlotHoverEnd(e) {
+        const slot = e.target.closest('.bm-slot');
+        if (!slot) return;
+        if (e.relatedTarget && slot.contains(e.relatedTarget)) return;
+        stopSlotQuake(slot);
+    }
+
+    function startSlotQuake(slot) {
+        const icon = slot.querySelector('.bm-slot-icon');
+        if (!icon) return;
+
+        stopSlotQuake(slot);
+
+        const now = performance.now();
+        quakeStates.set(icon, {
+            slot,
+            startMs: now,
+            seed: Math.random() * 10000,
+            gone: false
+        });
+
+        icon.classList.add('bm-quake-active');
+        ensureQuakeLoop();
+    }
+
+    function stopSlotQuake(slot) {
+        const icon = slot.querySelector('.bm-slot-icon');
+        if (!icon) return;
+        if (!quakeStates.has(icon)) return;
+
+        quakeStates.delete(icon);
+        resetIconQuakeStyle(icon);
+
+        if (!quakeStates.size && quakeRafId) {
+            cancelAnimationFrame(quakeRafId);
+            quakeRafId = 0;
+        }
+    }
+
+    function clearAllSlotQuakes() {
+        quakeStates.forEach((_state, icon) => resetIconQuakeStyle(icon));
+        quakeStates.clear();
+        if (quakeRafId) {
+            cancelAnimationFrame(quakeRafId);
+            quakeRafId = 0;
+        }
+    }
+
+    function resetIconQuakeStyle(icon) {
+        icon.classList.remove('bm-quake-active', 'bm-quake-gone');
+        icon.style.transform = '';
+        icon.style.filter = '';
+        icon.style.opacity = '';
+        icon.style.boxShadow = '';
+    }
+
+    function ensureQuakeLoop() {
+        if (quakeRafId) return;
+        quakeRafId = requestAnimationFrame(runQuakeFrame);
+    }
+
+    function runQuakeFrame(now) {
+        if (!quakeStates.size) {
+            quakeRafId = 0;
+            return;
+        }
+
+        quakeStates.forEach((state, icon) => {
+            if (!icon.isConnected || !state.slot.matches(':hover')) {
+                quakeStates.delete(icon);
+                resetIconQuakeStyle(icon);
+                return;
+            }
+
+            const elapsed = now - state.startMs;
+
+            // First 5s keep existing CSS subtle hover look.
+            if (elapsed < QUAKE_HOLD_MS) {
+                icon.style.transform = '';
+                icon.style.filter = '';
+                icon.style.opacity = '';
+                icon.style.boxShadow = '';
+                return;
+            }
+
+            const tremorElapsed = elapsed - QUAKE_HOLD_MS;
+            if (tremorElapsed < QUAKE_BUILD_MS) {
+                applyQuakeBuild(icon, tremorElapsed, state.seed);
+                return;
+            }
+
+            const explodeElapsed = tremorElapsed - QUAKE_BUILD_MS;
+            if (explodeElapsed < QUAKE_EXPLODE_MS) {
+                applyQuakeExplosion(icon, explodeElapsed, state.seed);
+                return;
+            }
+
+            if (!state.gone) {
+                state.gone = true;
+                icon.classList.add('bm-quake-gone');
+                icon.style.transform = 'translate3d(0,0,0) rotate(0deg) scale(0.01)';
+                icon.style.filter = 'saturate(2.1) contrast(1.5) brightness(1.35) blur(4px)';
+                icon.style.opacity = '0';
+                icon.style.boxShadow = 'none';
+            }
+        });
+
+        if (!quakeStates.size) {
+            quakeRafId = 0;
+            return;
+        }
+
+        quakeRafId = requestAnimationFrame(runQuakeFrame);
+    }
+
+    function applyQuakeBuild(icon, tremorElapsed, seed) {
+        const t = Math.min(1, tremorElapsed / QUAKE_BUILD_MS);
+        const ts = tremorElapsed / 1000;
+        const ramp = Math.pow(t, 2.2);
+        const ampPx = 0.08 + (0.45 * t) + (10.5 * ramp);
+        const rotAmp = 0.03 + (0.2 * t) + (6.4 * ramp);
+        const scale = 1.06 + (0.03 * t) + (0.2 * Math.pow(t, 2.7));
+
+        // Fast, irregular oscillation with layered frequencies and phase drift.
+        const f1 = 17 + 48 * t;
+        const f2 = 29 + 56 * t;
+        const f3 = 43 + 70 * t;
+        const drift = Math.sin((ts * 0.85) + seed * 0.0043) * (0.3 + 1.9 * t);
+
+        const x = ampPx * (
+            0.7 * Math.sin((ts * f1) + seed * 0.73) +
+            0.45 * Math.sin((ts * f2 * 1.07) + seed * 1.31 + drift) +
+            0.22 * Math.sin((ts * f3 * 0.93) + seed * 2.17)
+        );
+
+        const y = ampPx * (
+            0.66 * Math.sin((ts * f1 * 1.11) + seed * 2.29 - drift * 0.6) +
+            0.41 * Math.sin((ts * f2 * 0.89) + seed * 0.58) +
+            0.24 * Math.sin((ts * f3 * 1.21) + seed * 1.67)
+        );
+
+        const rot = rotAmp * (
+            0.65 * Math.sin((ts * f1 * 0.91) + seed * 1.1) +
+            0.35 * Math.sin((ts * f2 * 1.13) + seed * 2.7)
+        );
+
+        const pulse = Math.pow(Math.max(0, Math.sin((ts * (2.1 + t * 4.6)) + seed * 0.013)), 6);
+        const pulseBoost = 1 + pulse * (0.15 + t * 0.55);
+
+        icon.style.transform =
+            'translate3d(' + (x * pulseBoost).toFixed(3) + 'px,' + (y * pulseBoost).toFixed(3) + 'px,0) ' +
+            'rotate(' + (rot * pulseBoost).toFixed(3) + 'deg) ' +
+            'scale(' + (scale + pulse * 0.06).toFixed(4) + ')';
+
+        icon.style.filter =
+            'saturate(' + (1 + 0.32 * t).toFixed(3) + ') ' +
+            'contrast(' + (1 + 0.24 * t).toFixed(3) + ') ' +
+            'brightness(' + (1 + 0.12 * t).toFixed(3) + ')';
+
+        icon.style.opacity = (1 - (0.03 * Math.pow(t, 3))).toFixed(3);
+
+        const glowA = (0.21 + 0.26 * t).toFixed(3);
+        const glowB = (0.27 + 0.25 * t).toFixed(3);
+        const spread = (1 + 3.2 * t).toFixed(2);
+        const blur = (5 + 13 * t).toFixed(2);
+        icon.style.boxShadow =
+            '0 0 1px ' + spread + 'px rgba(255,255,255,' + glowA + '), ' +
+            '0 0 ' + blur + 'px ' + (2 + 5.5 * t).toFixed(2) + 'px rgba(0,0,0,' + glowB + ')';
+    }
+
+    function applyQuakeExplosion(icon, explodeElapsed, seed) {
+        const t = Math.min(1, explodeElapsed / QUAKE_EXPLODE_MS);
+        const ts = explodeElapsed / 1000;
+        const inv = 1 - t;
+
+        const blastAmp = (14 + 26 * t) * inv;
+        const x = blastAmp * Math.sin((ts * 85) + seed * 1.37);
+        const y = blastAmp * Math.sin((ts * 97) + seed * 2.11 + Math.PI / 3);
+        const rot = (13 + 30 * t) * inv * Math.sin((ts * 73) + seed * 0.91);
+        const scale = 1.26 + 1.35 * t - 2.45 * t * t;
+
+        icon.style.transform =
+            'translate3d(' + x.toFixed(3) + 'px,' + y.toFixed(3) + 'px,0) ' +
+            'rotate(' + rot.toFixed(3) + 'deg) ' +
+            'scale(' + Math.max(0.01, scale).toFixed(4) + ')';
+
+        icon.style.filter =
+            'saturate(' + (1.35 + 0.95 * t).toFixed(3) + ') ' +
+            'contrast(' + (1.2 + 0.42 * t).toFixed(3) + ') ' +
+            'brightness(' + (1.1 + 0.34 * t).toFixed(3) + ') ' +
+            'blur(' + (0.4 + 4.2 * t).toFixed(3) + 'px)';
+
+        icon.style.opacity = Math.max(0, 1 - Math.pow(t, 1.35)).toFixed(3);
+        icon.style.boxShadow =
+            '0 0 ' + (8 + 24 * t).toFixed(2) + 'px ' + (4 + 11 * t).toFixed(2) + 'px rgba(255,255,255,' + (0.5 - 0.48 * t).toFixed(3) + '), ' +
+            '0 0 ' + (20 + 35 * t).toFixed(2) + 'px ' + (9 + 14 * t).toFixed(2) + 'px rgba(0,0,0,' + (0.52 - 0.5 * t).toFixed(3) + ')';
     }
 
     function onSlotPointerDown(e) {

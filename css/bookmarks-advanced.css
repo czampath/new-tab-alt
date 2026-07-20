@@ -59,7 +59,7 @@
     min-height: 84px;   /* matches icon(36) + gap(6) + name(~14) + padding(14×2) */
     animation: popIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
     box-sizing: content-box;
-    transition: .15s;
+    transition: .2s;
 }
 
 .bm-slot:hover {
@@ -80,6 +80,25 @@
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
     font-family: 'Inter', sans-serif;
     flex-shrink: 0;
+    transition: all .15s ease-in-out;
+}
+
+.bm-slot:hover .bm-slot-icon{
+    transform: scale(1.06);
+    box-shadow: 0 0 1px 1px rgba(255, 255, 255, 0.21), 0 0 5px 2px rgba(0, 0, 0, 0.27);
+    transform-origin: 50% 50%;
+}
+
+.bm-slot-icon.bm-quake-active {
+    transition: none !important;
+    transform-origin: 50% 50%;
+    will-change: transform, filter, opacity, box-shadow;
+}
+
+.bm-slot-icon.bm-quake-gone {
+    opacity: 0;
+    filter: saturate(2) contrast(1.45) brightness(1.3) blur(4px);
+    box-shadow: none !important;
 }
 
 .bm-slot-icon img {
@@ -643,10 +662,12 @@ body.light-theme .bm-edit-toggle-btn.active {
 
 /* Segmented control for slot size */
 .bm-seg-control {
-    display: flex;
+    display: grid;
     border: 2px solid #e8e8e8;
     border-radius: 9px;
     overflow: hidden;
+    grid-auto-flow: column;
+    grid-template-columns: 4em;
 }
 
 .bm-seg-control button {
@@ -674,6 +695,12 @@ body.light-theme .bm-edit-toggle-btn.active {
 .bm-seg-control button:hover:not(.active) {
     background: #f5f5f5;
     color: #333;
+}
+
+/* Compact variant used inside label rows */
+.bm-seg-sm button {
+    padding: 3px 9px;
+    font-size: 11px;
 }
 
 /* Slots count preview */
