@@ -81,6 +81,7 @@
     font-family: 'Inter', sans-serif;
     flex-shrink: 0;
     transition: all .15s ease-in-out;
+    z-index: 5;
 }
 
 .bm-slot:hover .bm-slot-icon{
