@@ -11,41 +11,9 @@
     // ── Constants ─────────────────────────────────────────────
     const STORAGE_KEY = 'advancedBookmarksConfig';
     const DRAG_THRESHOLD = 6; // px movement before drag is committed
-    const QUAKE_HOLD_MS = 5000;
-    const QUAKE_BUILD_MS = 40000;
-    const QUAKE_EXPLODE_MS = 400;
-    const QUAKE_SECTION_GLITCH_DURATION_MS = 360;
-    const QUAKE_ENTRY_RAMP_MS = 1600;
-    const QUAKE_CORROSION_RAMP_MS = 10000;
-    const QUAKE_CORROSION_HINT_AT_MS = 20000;
-    const QUAKE_CORROSION_HINT_SPAN_MS = 140;
-
-    // ── Quake Synth (WebAudio) ──────────────────────────────
-    const QUAKE_SYNTH_ENABLED = true;
-    const QUAKE_SYNTH_BUILD_START_HZ = 50;
-    const QUAKE_SYNTH_BUILD_TARGET_HZ = 28000;
-    const QUAKE_SYNTH_BUILD_FREQ_PROGRESS_EXP = 6.4;
-    const QUAKE_SYNTH_BUILD_AMP_PROGRESS_EXP = 1.05;
-    const QUAKE_SYNTH_MASTER_GAIN = 0.07;
-    const QUAKE_SYNTH_BUILD_MAX_GAIN = 0.55;
-    const QUAKE_SYNTH_GAIN_FLOOR = 0.00001;
-
-    const QUAKE_SYNTH_WAVEFORMS = ['sine', 'sawtooth', 'triangle', 'square'];
-    const QUAKE_SYNTH_WAVE_LEVELS = [0.32, 0.34, 0.25, 0.22];
-    const QUAKE_SYNTH_DETUNE_SEMITONES = [-0.21, 60.13, 40.31, -20.34];
-    const QUAKE_SYNTH_DETUNE_RANDOM_SEMITONES = 0.07;
-
-    const QUAKE_SYNTH_DECAY_MS = 1300;
-    const QUAKE_SYNTH_DECAY_FREQ_FLOOR_HZ = 26;
-    const QUAKE_SYNTH_DECAY_EXP_FACTOR = 10;
-    const QUAKE_SYNTH_STOP_PADDING_MS = 200;
-
-    const QUAKE_SYNTH_REVERB_ENABLED = true;
-    const QUAKE_SYNTH_REVERB_MIX = 0.22;             // 0=dry, 1=wet
-    const QUAKE_SYNTH_REVERB_PREDELAY_MS = 22;
-    const QUAKE_SYNTH_REVERB_DECAY_SECONDS = 1.85;
-    const QUAKE_SYNTH_REVERB_IR_SECONDS = 2.4;
-    const QUAKE_SYNTH_REVERB_TONE_HZ = 3400;
+    const quakeSound = window.bookmarksQuakeSound;
+    const quakeConfig = (quakeSound && quakeSound.constants) || {};
+    const hoverAnimation = window.bookmarksHoverAnimation;
 
     const DEFAULT_BORDER = () => ({
         style: 'none',
@@ -68,6 +36,14 @@
         bookmarks: []
     });
 
+    function createDefaultBorder() {
+        return DEFAULT_BORDER();
+    }
+
+    function createDefaultGroup() {
+        return DEFAULT_GROUP();
+    }
+
     const DEFAULT_CONFIG = () => ({
         enabled: false,
         globalMaxSlots: 8,
@@ -83,14 +59,6 @@
     const quakeStates = new Map(); // key: .bm-slot-icon element
     let quakeRafId = 0;
     let corrosionFilterReady = false;
-    let quakeAudioCtx = null;
-    let quakeMasterGainNode = null;
-    let quakeDryGainNode = null;
-    let quakeWetGainNode = null;
-    let quakeReverbPreDelayNode = null;
-    let quakeReverbConvolverNode = null;
-    let quakeReverbToneNode = null;
-    let quakeAudioUnlockHooked = false;
 
     // ── ID generation ─────────────────────────────────────────
     function generateId() {
@@ -261,6 +229,157 @@
         return d.innerHTML;
     }
 
+    function setActiveModalContext(context) {
+        activeModalContext = context;
+    }
+
+    function getActiveModalContext() {
+        return activeModalContext;
+    }
+
+    function setEditingGroupId(groupId) {
+        editingGroupId = groupId;
+    }
+
+    function getEditingGroupId() {
+        return editingGroupId;
+    }
+
+    const modalsApi = {
+        getConfig: () => config,
+        saveConfig,
+        renderAdvancedBookmarks,
+        setActiveModalContext,
+        getActiveModalContext,
+        setEditingGroupId,
+        getEditingGroupId,
+        addBookmarkToGroup,
+        updateBookmarkInGroup,
+        deleteBookmarkFromGroup,
+        moveBookmark,
+        addGroup,
+        updateGroup,
+        deleteGroup,
+        reorderGroups,
+        createDefaultGroup,
+        createDefaultBorder,
+        safeUrl,
+        computeIconData,
+        toast,
+        escapeHtml,
+        parseRgba,
+        rgbToHex,
+        hexToRgb,
+        getConfig: () => config
+    };
+
+    const modalsController = window.bookmarksModals && window.bookmarksModals.createController
+        ? window.bookmarksModals.createController(modalsApi)
+        : null;
+
+    function ensureBookmarkModal() {
+        if (modalsController && typeof modalsController.ensureBookmarkModal === 'function') {
+            modalsController.ensureBookmarkModal();
+        }
+    }
+
+    function openAdvancedBookmarkModal(groupId, bookmarkId) {
+        if (modalsController && typeof modalsController.openAdvancedBookmarkModal === 'function') {
+            modalsController.openAdvancedBookmarkModal(groupId, bookmarkId);
+        }
+    }
+
+    function closeAdvancedBookmarkModal() {
+        if (modalsController && typeof modalsController.closeAdvancedBookmarkModal === 'function') {
+            modalsController.closeAdvancedBookmarkModal();
+        }
+    }
+
+    function saveAdvancedBookmark() {
+        if (modalsController && typeof modalsController.saveAdvancedBookmark === 'function') {
+            modalsController.saveAdvancedBookmark();
+        }
+    }
+
+    function deleteAdvancedBookmark() {
+        if (modalsController && typeof modalsController.deleteAdvancedBookmark === 'function') {
+            modalsController.deleteAdvancedBookmark();
+        }
+    }
+
+    function ensureGroupMgmtPanel() {
+        if (modalsController && typeof modalsController.ensureGroupMgmtPanel === 'function') {
+            modalsController.ensureGroupMgmtPanel();
+        }
+    }
+
+    function openGroupMgmtPanel() {
+        if (modalsController && typeof modalsController.openGroupMgmtPanel === 'function') {
+            modalsController.openGroupMgmtPanel();
+        }
+    }
+
+    function closeGroupMgmtPanel() {
+        if (modalsController && typeof modalsController.closeGroupMgmtPanel === 'function') {
+            modalsController.closeGroupMgmtPanel();
+        }
+    }
+
+    function refreshGroupMgmtList() {
+        if (modalsController && typeof modalsController.refreshGroupMgmtList === 'function') {
+            modalsController.refreshGroupMgmtList();
+        }
+    }
+
+    function createGroupMgmtRow(group) {
+        if (modalsController && typeof modalsController.createGroupMgmtRow === 'function') {
+            return modalsController.createGroupMgmtRow(group);
+        }
+        return null;
+    }
+
+    function confirmDeleteGroup(id, name) {
+        if (modalsController && typeof modalsController.confirmDeleteGroup === 'function') {
+            modalsController.confirmDeleteGroup(id, name);
+        }
+    }
+
+    function initDragReorder(listEl) {
+        if (modalsController && typeof modalsController.initDragReorder === 'function') {
+            modalsController.initDragReorder(listEl);
+        }
+    }
+
+    function ensureGroupEditor() {
+        if (modalsController && typeof modalsController.ensureGroupEditor === 'function') {
+            modalsController.ensureGroupEditor();
+        }
+    }
+
+    function openGroupEditor(groupId) {
+        if (modalsController && typeof modalsController.openGroupEditor === 'function') {
+            modalsController.openGroupEditor(groupId);
+        }
+    }
+
+    function closeGroupEditor() {
+        if (modalsController && typeof modalsController.closeGroupEditor === 'function') {
+            modalsController.closeGroupEditor();
+        }
+    }
+
+    function saveGroupEditorData() {
+        if (modalsController && typeof modalsController.saveGroupEditorData === 'function') {
+            modalsController.saveGroupEditorData();
+        }
+    }
+
+    function updateSlotsPreview() {
+        if (modalsController && typeof modalsController.updateSlotsPreview === 'function') {
+            modalsController.updateSlotsPreview();
+        }
+    }
+
     // ── Rendering ─────────────────────────────────────────────
     function renderAdvancedBookmarks() {
         const container = document.getElementById('advancedBookmarksContainer');
@@ -418,701 +537,6 @@
         return slot;
     }
 
-    // ── Advanced Bookmark Modal ────────────────────────────────
-    function ensureBookmarkModal() {
-        if (document.getElementById('advancedBookmarkModal')) return;
-
-        const overlay = document.createElement('div');
-        overlay.className = 'modal';
-        overlay.id = 'advancedBookmarkModal';
-        overlay.innerHTML =
-            '<div class="modal-content">' +
-                '<h3 id="advBmModalTitle">Add Bookmark</h3>' +
-                '<div class="form-group">' +
-                    '<label for="advBmTitle">Title</label>' +
-                    '<input type="text" id="advBmTitle" placeholder="My Site">' +
-                '</div>' +
-                '<div class="form-group">' +
-                    '<label for="advBmUrl">URL</label>' +
-                    '<input type="text" id="advBmUrl" placeholder="https://example.com">' +
-                '</div>' +
-                '<div class="form-group" id="bmGroupMoveRow">' +
-                    '<label for="advBmMoveGroup">Move to Group</label>' +
-                    '<select id="advBmMoveGroup"></select>' +
-                '</div>' +
-                '<hr style="border:none;border-top:1px solid #f0f0f0;margin:4px 0 14px">' +
-                '<div style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#aaa;margin-bottom:12px">Icon Override</div>' +
-                '<div class="form-group" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">' +
-                    '<label for="advBmIconOverride" style="margin-bottom:0">Custom Icon</label>' +
-                    '<label class="toggle-switch">' +
-                        '<input type="checkbox" id="advBmIconOverride">' +
-                        '<span class="toggle-slider"></span>' +
-                    '</label>' +
-                '</div>' +
-                '<div id="advBmIconOverrideDetails" style="display:none">' +
-                    '<div class="form-group">' +
-                        '<label style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">Icon Background<span class="bm-seg-control bm-seg-sm" id="advBmIconBgMode"><button data-val="auto" class="active">Auto</button><button data-val="custom">Custom</button></span></label>' +
-                        '<div id="advBmIconBgPicker" style="display:none"><div class="bm-color-row"><input type="color" id="advBmIconBgColor" value="#667eea"></div></div>' +
-                    '</div>' +
-                    '<div class="form-group">' +
-                        '<label for="advBmIconLetter">Character <span style="font-weight:400;color:#bbb">(empty = auto from URL)</span></label>' +
-                        '<input type="text" id="advBmIconLetter" maxlength="8" placeholder="auto" style="width:80px">' +
-                    '</div>' +
-                    '<div class="form-group">' +
-                        '<label style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">Character Color<span class="bm-seg-control bm-seg-sm" id="advBmIconLetterColorMode"><button data-val="auto" class="active">Auto</button><button data-val="custom">Custom</button></span></label>' +
-                        '<div id="advBmIconLetterColorPicker" style="display:none"><div class="bm-color-row"><input type="color" id="advBmIconLetterColor" value="#ffffff"></div></div>' +
-                    '</div>' +
-                '</div>' +
-                '<div class="modal-buttons">' +
-                    '<button class="modal-btn danger" id="advBmDeleteBtn" style="display:none">Delete</button>' +
-                    '<div style="flex:1"></div>' +
-                    '<button class="modal-btn secondary" id="advBmCancelBtn">Cancel</button>' +
-                    '<button class="modal-btn primary" id="advBmSaveBtn">Save</button>' +
-                '</div>' +
-            '</div>';
-
-        document.body.appendChild(overlay);
-
-        let mdTarget = null;
-        overlay.addEventListener('mousedown', (e) => {
-            mdTarget = (e.target === overlay) ? overlay : null;
-        });
-        overlay.addEventListener('mouseup', (e) => {
-            if (mdTarget === overlay && e.target === overlay) closeAdvancedBookmarkModal();
-            mdTarget = null;
-        });
-
-        document.getElementById('advBmCancelBtn').addEventListener('click', closeAdvancedBookmarkModal);
-        document.getElementById('advBmSaveBtn').addEventListener('click', saveAdvancedBookmark);
-        document.getElementById('advBmDeleteBtn').addEventListener('click', deleteAdvancedBookmark);
-
-        ['advBmTitle', 'advBmUrl'].forEach(id => {
-            document.getElementById(id).addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') saveAdvancedBookmark();
-            });
-        });
-
-        document.getElementById('advBmIconOverride').addEventListener('change', () => {
-            const enabled = document.getElementById('advBmIconOverride').checked;
-            document.getElementById('advBmIconOverrideDetails').style.display = enabled ? '' : 'none';
-        });
-
-        ['advBmIconBgMode', 'advBmIconLetterColorMode'].forEach(modeId => {
-            const pickerId = modeId === 'advBmIconBgMode' ? 'advBmIconBgPicker' : 'advBmIconLetterColorPicker';
-            document.getElementById(modeId).addEventListener('click', (e) => {
-                const btn = e.target.closest('button[data-val]');
-                if (!btn) return;
-                document.querySelectorAll('#' + modeId + ' button').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                document.getElementById(pickerId).style.display = btn.dataset.val === 'custom' ? '' : 'none';
-            });
-        });
-    }
-
-    function openAdvancedBookmarkModal(groupId, bookmarkId) {
-        ensureBookmarkModal();
-        activeModalContext = { groupId, bookmarkId };
-
-        const titleEl = document.getElementById('advBmModalTitle');
-        const titleInput = document.getElementById('advBmTitle');
-        const urlInput = document.getElementById('advBmUrl');
-        const deleteBtn = document.getElementById('advBmDeleteBtn');
-        const moveRow = document.getElementById('bmGroupMoveRow');
-        const moveSelect = document.getElementById('advBmMoveGroup');
-
-        if (bookmarkId) {
-            const g = config.groups.find(g => g.id === groupId);
-            const bm = g ? g.bookmarks.find(b => b.id === bookmarkId) : null;
-            if (!bm) return;
-
-            titleEl.textContent = 'Edit Bookmark';
-            titleInput.value = bm.title;
-            urlInput.value = bm.url;
-            deleteBtn.style.display = '';
-
-            if (config.groups.length > 1) {
-                moveRow.classList.add('visible');
-                moveSelect.innerHTML = config.groups
-                    .map(grp => '<option value="' + grp.id + '"' + (grp.id === groupId ? ' selected' : '') + '>' + escapeHtml(grp.name) + '</option>')
-                    .join('');
-            } else {
-                moveRow.classList.remove('visible');
-            }
-
-            const io = bm.iconOverride || { enabled: false, bgColor: '#667eea', letter: '', letterColor: '#ffffff' };
-            document.getElementById('advBmIconOverride').checked = io.enabled;
-            document.getElementById('advBmIconOverrideDetails').style.display = io.enabled ? '' : 'none';
-            const bgAuto = io.bgColor == null;
-            document.querySelectorAll('#advBmIconBgMode button').forEach(b => b.classList.toggle('active', b.dataset.val === (bgAuto ? 'auto' : 'custom')));
-            document.getElementById('advBmIconBgPicker').style.display = bgAuto ? 'none' : '';
-            if (!bgAuto) { const p = parseRgba(io.bgColor); document.getElementById('advBmIconBgColor').value = rgbToHex(p.r, p.g, p.b); }
-            document.getElementById('advBmIconLetter').value = io.letter || '';
-            const lcAuto = io.letterColor == null;
-            document.querySelectorAll('#advBmIconLetterColorMode button').forEach(b => b.classList.toggle('active', b.dataset.val === (lcAuto ? 'auto' : 'custom')));
-            document.getElementById('advBmIconLetterColorPicker').style.display = lcAuto ? 'none' : '';
-            if (!lcAuto) { const p = parseRgba(io.letterColor); document.getElementById('advBmIconLetterColor').value = rgbToHex(p.r, p.g, p.b); }
-        } else {
-            titleEl.textContent = 'Add Bookmark';
-            titleInput.value = '';
-            urlInput.value = '';
-            deleteBtn.style.display = 'none';
-            moveRow.classList.remove('visible');
-
-            document.getElementById('advBmIconOverride').checked = false;
-            document.getElementById('advBmIconOverrideDetails').style.display = 'none';
-            document.querySelectorAll('#advBmIconBgMode button').forEach(b => b.classList.toggle('active', b.dataset.val === 'custom'));
-            document.getElementById('advBmIconBgPicker').style.display = '';
-            document.getElementById('advBmIconBgColor').value = '#667eea';
-            document.getElementById('advBmIconLetter').value = '';
-            document.querySelectorAll('#advBmIconLetterColorMode button').forEach(b => b.classList.toggle('active', b.dataset.val === 'auto'));
-            document.getElementById('advBmIconLetterColorPicker').style.display = 'none';
-        }
-
-        const overlay = document.getElementById('advancedBookmarkModal');
-        overlay.classList.remove('closing');
-        overlay.classList.add('active');
-        titleInput.focus();
-    }
-
-    function closeAdvancedBookmarkModal() {
-        const overlay = document.getElementById('advancedBookmarkModal');
-        if (!overlay) return;
-        overlay.classList.add('closing');
-        overlay.classList.remove('active');
-        setTimeout(() => overlay.classList.remove('closing'), 200);
-        activeModalContext = null;
-    }
-
-    function saveAdvancedBookmark() {
-        if (!activeModalContext) return;
-
-        const title = document.getElementById('advBmTitle').value.trim();
-        const rawUrl = document.getElementById('advBmUrl').value.trim();
-        if (!title || !rawUrl) return;
-
-        let formattedUrl = rawUrl;
-        if (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://') && !rawUrl.startsWith('file://')) {
-            formattedUrl = 'https://' + rawUrl;
-        }
-
-        const sanitized = safeUrl(formattedUrl);
-        if (sanitized === 'about:blank') {
-            toast('Please enter a valid URL (e.g. github.com or https://example.com)');
-            return;
-        }
-
-        const { iconHue, iconLetter } = computeIconData(sanitized);
-        const { groupId, bookmarkId } = activeModalContext;
-
-        const iconOverride = {
-            enabled: document.getElementById('advBmIconOverride').checked,
-            bgColor: document.querySelector('#advBmIconBgMode button.active')?.dataset.val === 'auto' ? null : document.getElementById('advBmIconBgColor').value,
-            letter: document.getElementById('advBmIconLetter').value.trim(),
-            letterColor: document.querySelector('#advBmIconLetterColorMode button.active')?.dataset.val === 'auto' ? null : document.getElementById('advBmIconLetterColor').value
-        };
-
-        if (bookmarkId) {
-            const moveRow = document.getElementById('bmGroupMoveRow');
-            const moveSelect = document.getElementById('advBmMoveGroup');
-            const targetGroupId = (moveRow && moveRow.classList.contains('visible') && moveSelect)
-                ? moveSelect.value
-                : groupId;
-
-            updateBookmarkInGroup(groupId, bookmarkId, { title, url: sanitized, iconHue, iconLetter, iconOverride });
-            if (targetGroupId !== groupId) {
-                moveBookmark(groupId, targetGroupId, bookmarkId);
-            }
-        } else {
-            addBookmarkToGroup(groupId, { title, url: sanitized, iconHue, iconLetter, iconOverride });
-        }
-
-        closeAdvancedBookmarkModal();
-    }
-
-    function deleteAdvancedBookmark() {
-        if (!activeModalContext || !activeModalContext.bookmarkId) return;
-        deleteBookmarkFromGroup(activeModalContext.groupId, activeModalContext.bookmarkId);
-        closeAdvancedBookmarkModal();
-    }
-
-    // ── Group Management Panel ────────────────────────────────
-    function ensureGroupMgmtPanel() {
-        if (document.getElementById('bmMgmtOverlay')) return;
-
-        const overlay = document.createElement('div');
-        overlay.className = 'bm-mgmt-overlay';
-        overlay.id = 'bmMgmtOverlay';
-        overlay.innerHTML =
-            '<div class="bm-mgmt-panel" id="bmMgmtPanel">' +
-                '<div class="bm-mgmt-header">' +
-                    '<span class="bm-mgmt-title">Manage Groups</span>' +
-                    '<button class="bm-mgmt-close-btn" id="bmMgmtCloseBtn">\u00d7</button>' +
-                '</div>' +
-                '<div class="bm-mgmt-global">' +
-                    '<label for="bmGlobalSlots">Global columns</label>' +
-                    '<input type="number" id="bmGlobalSlots" min="1" max="20" value="8">' +
-                    '<span class="bm-mgmt-slots-hint">max bookmark columns per row</span>' +
-                '</div>' +
-                '<div class="bm-mgmt-list" id="bmMgmtList"></div>' +
-                '<div class="bm-mgmt-footer">' +
-                    '<button class="bm-mgmt-add-group-btn" id="bmMgmtAddGroupBtn">+ Add Group</button>' +
-                '</div>' +
-            '</div>';
-
-        document.body.appendChild(overlay);
-
-        let mdTarget = null;
-        overlay.addEventListener('mousedown', (e) => {
-            mdTarget = (e.target === overlay) ? overlay : null;
-        });
-        overlay.addEventListener('mouseup', (e) => {
-            if (mdTarget === overlay && e.target === overlay) closeGroupMgmtPanel();
-            mdTarget = null;
-        });
-
-        document.getElementById('bmMgmtCloseBtn').addEventListener('click', closeGroupMgmtPanel);
-        document.getElementById('bmMgmtAddGroupBtn').addEventListener('click', () => openGroupEditor(null));
-
-        document.getElementById('bmGlobalSlots').addEventListener('change', () => {
-            const val = parseInt(document.getElementById('bmGlobalSlots').value, 10);
-            if (val >= 1 && val <= 20) {
-                config.globalMaxSlots = val;
-                saveConfig();
-                renderAdvancedBookmarks();
-                updateSlotsPreview();
-            }
-        });
-    }
-
-    function openGroupMgmtPanel() {
-        ensureGroupMgmtPanel();
-        document.getElementById('bmGlobalSlots').value = config.globalMaxSlots;
-        refreshGroupMgmtList();
-        const overlay = document.getElementById('bmMgmtOverlay');
-        overlay.classList.remove('closing');
-        overlay.classList.add('active');
-    }
-
-    function closeGroupMgmtPanel() {
-        const overlay = document.getElementById('bmMgmtOverlay');
-        if (!overlay) return;
-        overlay.classList.add('closing');
-        overlay.classList.remove('active');
-        setTimeout(() => overlay.classList.remove('closing'), 220);
-    }
-
-    function refreshGroupMgmtList() {
-        const list = document.getElementById('bmMgmtList');
-        if (!list) return;
-        list.innerHTML = '';
-
-        if (!config.groups.length) {
-            const empty = document.createElement('div');
-            empty.className = 'bm-mgmt-list-empty';
-            empty.textContent = 'No groups yet. Add one below.';
-            list.appendChild(empty);
-            return;
-        }
-
-        config.groups.forEach(group => list.appendChild(createGroupMgmtRow(group)));
-        initDragReorder(list);
-    }
-
-    function createGroupMgmtRow(group) {
-        const row = document.createElement('div');
-        row.className = 'bm-mgmt-group-row';
-        row.dataset.id = group.id;
-        row.draggable = true;
-
-        const count = group.bookmarks.length;
-        const meta = group.maxSlots + ' col' + (group.maxSlots !== 1 ? 's' : '') +
-                     ' \u00b7 ' + count + ' bookmark' + (count !== 1 ? 's' : '');
-
-        row.innerHTML =
-            '<span class="bm-mgmt-drag-handle" title="Drag to reorder">\u2807</span>' +
-            '<div class="bm-mgmt-group-info">' +
-                '<div class="bm-mgmt-group-name-text">' + escapeHtml(group.name) + '</div>' +
-                '<div class="bm-mgmt-group-meta">' + escapeHtml(meta) + '</div>' +
-            '</div>' +
-            '<div class="bm-mgmt-group-actions">' +
-                '<button class="bm-mgmt-icon-btn" title="Edit group" data-action="edit">\u270e</button>' +
-                '<button class="bm-mgmt-icon-btn danger" title="Delete group" data-action="delete">\ud83d\uddd1</button>' +
-            '</div>';
-
-        row.querySelector('[data-action="edit"]').addEventListener('click', () => openGroupEditor(group.id));
-        row.querySelector('[data-action="delete"]').addEventListener('click', () => confirmDeleteGroup(group.id, group.name));
-        return row;
-    }
-
-    function confirmDeleteGroup(id, name) {
-        const group = config.groups.find(g => g.id === id);
-        if (!group) return;
-        const msg = group.bookmarks.length > 0
-            ? 'Delete group "' + name + '" and all ' + group.bookmarks.length + ' bookmark(s) inside it?'
-            : 'Delete group "' + name + '"?';
-        if (!confirm(msg)) return;
-        deleteGroup(id);
-        refreshGroupMgmtList();
-    }
-
-    // ── Drag-to-reorder (HTML5 Drag API) ──────────────────────
-    function initDragReorder(listEl) {
-        let dragSrcId = null;
-
-        listEl.querySelectorAll('.bm-mgmt-group-row').forEach(row => {
-            row.addEventListener('dragstart', (e) => {
-                dragSrcId = row.dataset.id;
-                row.classList.add('dragging');
-                e.dataTransfer.effectAllowed = 'move';
-            });
-
-            row.addEventListener('dragend', () => {
-                row.classList.remove('dragging');
-                listEl.querySelectorAll('.bm-mgmt-group-row').forEach(r => r.classList.remove('drag-over'));
-            });
-
-            row.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                e.dataTransfer.dropEffect = 'move';
-                listEl.querySelectorAll('.bm-mgmt-group-row').forEach(r => r.classList.remove('drag-over'));
-                if (row.dataset.id !== dragSrcId) row.classList.add('drag-over');
-            });
-
-            row.addEventListener('drop', (e) => {
-                e.preventDefault();
-                if (!dragSrcId || dragSrcId === row.dataset.id) return;
-                const ids = [...listEl.querySelectorAll('.bm-mgmt-group-row')].map(r => r.dataset.id);
-                const srcIdx = ids.indexOf(dragSrcId);
-                const dstIdx = ids.indexOf(row.dataset.id);
-                if (srcIdx < 0 || dstIdx < 0) return;
-                ids.splice(srcIdx, 1);
-                ids.splice(dstIdx, 0, dragSrcId);
-                reorderGroups(ids);
-                refreshGroupMgmtList();
-            });
-        });
-    }
-
-    // ── Group Editor Modal ─────────────────────────────────────
-    function ensureGroupEditor() {
-        if (document.getElementById('bmEditorOverlay')) return;
-
-        const overlay = document.createElement('div');
-        overlay.className = 'bm-editor-overlay';
-        overlay.id = 'bmEditorOverlay';
-        overlay.innerHTML =
-            '<div class="bm-editor-panel" id="bmEditorPanel">' +
-                '<div class="bm-editor-inner">' +
-                    '<div class="bm-editor-title" id="bmEditorTitle">Edit Group</div>' +
-
-                    '<div class="bm-editor-row">' +
-                        '<label for="bmEdName">Group Name</label>' +
-                        '<input type="text" id="bmEdName" placeholder="e.g. GitHub Repos">' +
-                    '</div>' +
-
-                    '<div class="bm-editor-toggle-row">' +
-                        '<label>Show Group Name</label>' +
-                        '<label class="toggle-switch">' +
-                            '<input type="checkbox" id="bmEdShowName" checked>' +
-                            '<span class="toggle-slider"></span>' +
-                        '</label>' +
-                    '</div>' +
-
-                    '<div class="bm-editor-row">' +
-                        '<label for="bmEdSlots">Column Width (max slots)</label>' +
-                        '<input type="number" id="bmEdSlots" min="1" max="20" value="4">' +
-                        '<div class="bm-slots-preview" id="bmEdSlotsPreview"></div>' +
-                    '</div>' +
-
-                    '<div class="bm-editor-row">' +
-                        '<label>Slot Size</label>' +
-                        '<div class="bm-seg-control" id="bmEdSlotSize">' +
-                            '<button data-val="small">Small</button>' +
-                            '<button data-val="medium" class="active">Medium</button>' +
-                            '<button data-val="large">Large</button>' +
-                        '</div>' +
-                    '</div>' +
-
-                    '<div class="bm-editor-toggle-row">' +
-                        '<label>Show Bookmark Names</label>' +
-                        '<label class="toggle-switch">' +
-                            '<input type="checkbox" id="bmEdShowNames" checked>' +
-                            '<span class="toggle-slider"></span>' +
-                        '</label>' +
-                    '</div>' +
-
-                    '<hr class="bm-editor-divider">' +
-
-                    '<div class="bm-editor-row">' +
-                        '<label>Background Color &amp; Opacity</label>' +
-                        '<div class="bm-color-row">' +
-                            '<input type="color" id="bmEdBgColor" value="#ffffff">' +
-                            '<input type="range" id="bmEdBgOpacity" min="0" max="100" value="8">' +
-                            '<span class="bm-color-opacity-label" id="bmEdBgOpacityLabel">8%</span>' +
-                        '</div>' +
-                    '</div>' +
-
-                    '<div class="bm-editor-row">' +
-                        '<label for="bmEdBorderStyle">Border Style</label>' +
-                        '<select id="bmEdBorderStyle">' +
-                            '<option value="none">None</option>' +
-                            '<option value="solid">Solid</option>' +
-                            '<option value="dashed">Dashed</option>' +
-                            '<option value="dotted">Dotted</option>' +
-                        '</select>' +
-                    '</div>' +
-
-                    '<div id="bmEdBorderDetails">' +
-                        '<div class="bm-editor-row">' +
-                            '<label>Border Color &amp; Width</label>' +
-                            '<div class="bm-color-row">' +
-                                '<input type="color" id="bmEdBorderColor" value="#ffffff">' +
-                                '<input type="number" id="bmEdBorderWidth" min="1" max="10" value="1">' +
-                                '<span style="font-size:12px;color:#aaa;">px</span>' +
-                            '</div>' +
-                        '</div>' +
-                    '</div>' +
-
-                    '<div class="bm-editor-row">' +
-                        '<label>Border Radius: <span id="bmEdRadiusLabel">12px</span></label>' +
-                        '<input type="range" id="bmEdRadius" min="0" max="28" value="12" style="width:100%;accent-color:#667eea;">' +
-                    '</div>' +
-
-                    '<div class="bm-editor-row">' +
-                        '<label>Inner Padding: <span id="bmEdPaddingLabel">10px</span></label>' +
-                        '<input type="range" id="bmEdPadding" min="0" max="28" value="10" style="width:100%;accent-color:#667eea;">' +
-                    '</div>' +
-
-                    '<hr class="bm-editor-divider">' +
-                    '<div class="bm-editor-section-label">Icon Style Override</div>' +
-                    '<div class="bm-editor-toggle-row">' +
-                        '<label>Override Icon Style</label>' +
-                        '<label class="toggle-switch">' +
-                            '<input type="checkbox" id="bmEdIconOverride">' +
-                            '<span class="toggle-slider"></span>' +
-                        '</label>' +
-                    '</div>' +
-                    '<div id="bmEdIconOverrideDetails" style="display:none">' +
-                        '<div class="bm-editor-row">' +
-                            '<label style="display:flex;align-items:center;justify-content:space-between">Icon Background<span class="bm-seg-control bm-seg-sm" id="bmEdIconBgMode"><button data-val="auto" class="active">Auto</button><button data-val="custom">Custom</button></span></label>' +
-                            '<div id="bmEdIconBgPicker" style="display:none;margin-top:8px"><div class="bm-color-row"><input type="color" id="bmEdIconBgColor" value="#667eea"></div></div>' +
-                        '</div>' +
-                        '<div class="bm-editor-row">' +
-                            '<label for="bmEdIconLetter">Character <span style="font-weight:400;color:#bbb">(empty = auto from URL)</span></label>' +
-                            '<input type="text" id="bmEdIconLetter" maxlength="8" placeholder="auto" style="width:80px">' +
-                        '</div>' +
-                        '<div class="bm-editor-row">' +
-                            '<label style="display:flex;align-items:center;justify-content:space-between">Character Color<span class="bm-seg-control bm-seg-sm" id="bmEdIconLetterColorMode"><button data-val="auto" class="active">Auto</button><button data-val="custom">Custom</button></span></label>' +
-                            '<div id="bmEdIconLetterColorPicker" style="display:none;margin-top:8px"><div class="bm-color-row"><input type="color" id="bmEdIconLetterColor" value="#ffffff"></div></div>' +
-                        '</div>' +
-                    '</div>' +
-                '</div>' +
-                '<div class="bm-editor-footer">' +
-                    '<button class="bm-editor-cancel-btn" id="bmEdCancelBtn">Cancel</button>' +
-                    '<button class="bm-editor-save-btn" id="bmEdSaveBtn">Save Group</button>' +
-                '</div>' +
-            '</div>';
-
-        document.body.appendChild(overlay);
-
-        let mdTarget = null;
-        overlay.addEventListener('mousedown', (e) => {
-            mdTarget = (e.target === overlay) ? overlay : null;
-        });
-        overlay.addEventListener('mouseup', (e) => {
-            if (mdTarget === overlay && e.target === overlay) closeGroupEditor();
-            mdTarget = null;
-        });
-
-        document.getElementById('bmEdCancelBtn').addEventListener('click', closeGroupEditor);
-        document.getElementById('bmEdSaveBtn').addEventListener('click', saveGroupEditorData);
-
-        document.getElementById('bmEdSlots').addEventListener('input', updateSlotsPreview);
-
-        document.getElementById('bmEdSlotSize').addEventListener('click', (e) => {
-            const btn = e.target.closest('button[data-val]');
-            if (!btn) return;
-            document.querySelectorAll('#bmEdSlotSize button').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-        });
-
-        document.getElementById('bmEdBgOpacity').addEventListener('input', () => {
-            document.getElementById('bmEdBgOpacityLabel').textContent =
-                document.getElementById('bmEdBgOpacity').value + '%';
-        });
-
-        document.getElementById('bmEdBorderStyle').addEventListener('change', () => {
-            const val = document.getElementById('bmEdBorderStyle').value;
-            document.getElementById('bmEdBorderDetails').style.display = (val === 'none') ? 'none' : '';
-        });
-
-        document.getElementById('bmEdRadius').addEventListener('input', () => {
-            document.getElementById('bmEdRadiusLabel').textContent =
-                document.getElementById('bmEdRadius').value + 'px';
-        });
-
-        document.getElementById('bmEdPadding').addEventListener('input', () => {
-            document.getElementById('bmEdPaddingLabel').textContent =
-                document.getElementById('bmEdPadding').value + 'px';
-        });
-
-        document.getElementById('bmEdIconOverride').addEventListener('change', () => {
-            const enabled = document.getElementById('bmEdIconOverride').checked;
-            document.getElementById('bmEdIconOverrideDetails').style.display = enabled ? '' : 'none';
-        });
-
-        ['bmEdIconBgMode', 'bmEdIconLetterColorMode'].forEach(modeId => {
-            const pickerId = modeId === 'bmEdIconBgMode' ? 'bmEdIconBgPicker' : 'bmEdIconLetterColorPicker';
-            document.getElementById(modeId).addEventListener('click', (e) => {
-                const btn = e.target.closest('button[data-val]');
-                if (!btn) return;
-                document.querySelectorAll('#' + modeId + ' button').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                document.getElementById(pickerId).style.display = btn.dataset.val === 'custom' ? '' : 'none';
-            });
-        });
-    }
-
-    function openGroupEditor(groupId) {
-        ensureGroupEditor();
-        editingGroupId = groupId;
-
-        const group = groupId ? config.groups.find(g => g.id === groupId) : null;
-        const g = group || DEFAULT_GROUP();
-
-        document.getElementById('bmEditorTitle').textContent = groupId ? 'Edit Group' : 'New Group';
-        document.getElementById('bmEdName').value = g.name;
-        document.getElementById('bmEdShowName').checked = g.showName !== false;
-        document.getElementById('bmEdSlots').max = config.globalMaxSlots;
-        document.getElementById('bmEdSlots').value = g.maxSlots;
-        document.getElementById('bmEdShowNames').checked = g.showBookmarkNames !== false;
-
-        document.querySelectorAll('#bmEdSlotSize button').forEach(b => {
-            b.classList.toggle('active', b.dataset.val === (g.slotSize || 'medium'));
-        });
-
-        const bgParsed = parseRgba(g.background);
-        document.getElementById('bmEdBgColor').value = rgbToHex(bgParsed.r, bgParsed.g, bgParsed.b);
-        const opacityPct = Math.round(bgParsed.a * 100);
-        document.getElementById('bmEdBgOpacity').value = opacityPct;
-        document.getElementById('bmEdBgOpacityLabel').textContent = opacityPct + '%';
-
-        const border = g.border || DEFAULT_BORDER();
-        document.getElementById('bmEdBorderStyle').value = border.style || 'none';
-        document.getElementById('bmEdBorderDetails').style.display = (border.style === 'none') ? 'none' : '';
-
-        const bcParsed = parseRgba(border.color);
-        document.getElementById('bmEdBorderColor').value = rgbToHex(bcParsed.r, bcParsed.g, bcParsed.b);
-        document.getElementById('bmEdBorderWidth').value = border.width || 1;
-
-        const radius = border.radius !== undefined ? border.radius : 12;
-        document.getElementById('bmEdRadius').value = radius;
-        document.getElementById('bmEdRadiusLabel').textContent = radius + 'px';
-
-        const padding = g.padding !== undefined ? g.padding : 10;
-        document.getElementById('bmEdPadding').value = padding;
-        document.getElementById('bmEdPaddingLabel').textContent = padding + 'px';
-
-        const io = g.iconOverride || { enabled: false, bgColor: '#667eea', letter: '', letterColor: '#ffffff' };
-        document.getElementById('bmEdIconOverride').checked = io.enabled;
-        document.getElementById('bmEdIconOverrideDetails').style.display = io.enabled ? '' : 'none';
-        const bgAuto = io.bgColor == null;
-        document.querySelectorAll('#bmEdIconBgMode button').forEach(b => b.classList.toggle('active', b.dataset.val === (bgAuto ? 'auto' : 'custom')));
-        document.getElementById('bmEdIconBgPicker').style.display = bgAuto ? 'none' : '';
-        if (!bgAuto) { const p = parseRgba(io.bgColor); document.getElementById('bmEdIconBgColor').value = rgbToHex(p.r, p.g, p.b); }
-        document.getElementById('bmEdIconLetter').value = io.letter || '';
-        const lcAuto = io.letterColor == null;
-        document.querySelectorAll('#bmEdIconLetterColorMode button').forEach(b => b.classList.toggle('active', b.dataset.val === (lcAuto ? 'auto' : 'custom')));
-        document.getElementById('bmEdIconLetterColorPicker').style.display = lcAuto ? 'none' : '';
-        if (!lcAuto) { const p = parseRgba(io.letterColor); document.getElementById('bmEdIconLetterColor').value = rgbToHex(p.r, p.g, p.b); }
-
-        updateSlotsPreview();
-
-        const overlay = document.getElementById('bmEditorOverlay');
-        overlay.classList.remove('closing');
-        overlay.classList.add('active');
-        document.getElementById('bmEdName').focus();
-    }
-
-    function closeGroupEditor() {
-        const overlay = document.getElementById('bmEditorOverlay');
-        if (!overlay) return;
-        overlay.classList.add('closing');
-        overlay.classList.remove('active');
-        setTimeout(() => overlay.classList.remove('closing'), 200);
-    }
-
-    function saveGroupEditorData() {
-        const name = document.getElementById('bmEdName').value.trim() || 'Unnamed Group';
-        const showName = document.getElementById('bmEdShowName').checked;
-        const rawSlots = parseInt(document.getElementById('bmEdSlots').value, 10) || 4;
-        const maxSlots = Math.max(1, Math.min(config.globalMaxSlots, rawSlots));
-
-        const activeBtn = document.querySelector('#bmEdSlotSize button.active');
-        const slotSize = activeBtn ? activeBtn.dataset.val : 'medium';
-        const showBookmarkNames = document.getElementById('bmEdShowNames').checked;
-
-        // Background
-        const bgColor = document.getElementById('bmEdBgColor').value;
-        const bgOpacity = (parseInt(document.getElementById('bmEdBgOpacity').value, 10) / 100).toFixed(2);
-        const bgRgb = hexToRgb(bgColor);
-        const background = 'rgba(' + bgRgb.r + ',' + bgRgb.g + ',' + bgRgb.b + ',' + bgOpacity + ')';
-
-        // Border
-        const borderStyle = document.getElementById('bmEdBorderStyle').value;
-        const bcColor = document.getElementById('bmEdBorderColor').value;
-        const bcRgb = hexToRgb(bcColor);
-        const borderWidth = parseInt(document.getElementById('bmEdBorderWidth').value, 10) || 1;
-        const borderRadius = parseInt(document.getElementById('bmEdRadius').value, 10);
-        const padding = parseInt(document.getElementById('bmEdPadding').value, 10);
-
-        const iconOverrideEnabled = document.getElementById('bmEdIconOverride').checked;
-        const iconBgColor = document.querySelector('#bmEdIconBgMode button.active')?.dataset.val === 'auto' ? null : document.getElementById('bmEdIconBgColor').value;
-        const iconLetter = document.getElementById('bmEdIconLetter').value.trim();
-        const iconLetterColor = document.querySelector('#bmEdIconLetterColorMode button.active')?.dataset.val === 'auto' ? null : document.getElementById('bmEdIconLetterColor').value;
-
-        const patch = {
-            name, showName, maxSlots, slotSize, showBookmarkNames, background,
-            border: {
-                style: borderStyle,
-                width: borderWidth,
-                color: 'rgba(' + bcRgb.r + ',' + bcRgb.g + ',' + bcRgb.b + ',1)',
-                radius: borderRadius
-            },
-            padding,
-            iconOverride: {
-                enabled: iconOverrideEnabled,
-                bgColor: iconBgColor,
-                letter: iconLetter,
-                letterColor: iconLetterColor
-            }
-        };
-
-        if (editingGroupId) {
-            updateGroup(editingGroupId, patch);
-        } else {
-            addGroup(patch);
-        }
-
-        closeGroupEditor();
-
-        const mgmt = document.getElementById('bmMgmtOverlay');
-        if (mgmt && mgmt.classList.contains('active')) refreshGroupMgmtList();
-    }
-
-    function updateSlotsPreview() {
-        const preview = document.getElementById('bmEdSlotsPreview');
-        if (!preview) return;
-        const total = config.globalMaxSlots;
-        const active = parseInt(document.getElementById('bmEdSlots').value, 10) || 4;
-        preview.innerHTML = '';
-        for (let i = 0; i < total; i++) {
-            const cell = document.createElement('div');
-            cell.className = 'bm-slots-preview-cell' + (i < active ? ' active' : '');
-            preview.appendChild(cell);
-        }
-    }
-
     // ── Color utilities ────────────────────────────────────────
     function parseRgba(str) {
         if (!str) return { r: 255, g: 255, b: 255, a: 0.08 };
@@ -1209,358 +633,80 @@
         if (e.relatedTarget && slot.contains(e.relatedTarget)) return;
 
         const icon = slot.querySelector('.bm-slot-icon');
-        const state = icon ? quakeStates.get(icon) : null;
+        const state = icon ? (hoverAnimation && typeof hoverAnimation.getQuakeState === 'function' ? hoverAnimation.getQuakeState(icon) : null) : null;
         const explodedGone = !!icon && (icon.classList.contains('bm-quake-gone') || (state && state.gone));
-        stopSlotQuake(slot);
+        if (hoverAnimation && typeof hoverAnimation.stopSlotQuake === 'function') {
+            hoverAnimation.stopSlotQuake(slot);
+        }
         if (explodedGone) {
             const section = slot.closest('.bookmarks-section');
-            spawnBookmarksSectionGlitch(icon, state ? state.seed : Math.random() * 10000);
-            spawnBookmarksSectionGlitch(section, state ? state.seed : Math.random() * 10000);
+            if (hoverAnimation && typeof hoverAnimation.spawnBookmarksSectionGlitch === 'function') {
+                hoverAnimation.spawnBookmarksSectionGlitch(icon, state ? state.seed : Math.random() * 10000);
+                hoverAnimation.spawnBookmarksSectionGlitch(section, state ? state.seed : Math.random() * 10000);
+            }
         }
     }
 
     function startSlotQuake(slot) {
-        const icon = slot.querySelector('.bm-slot-icon');
-        if (!icon) return;
-
-        stopSlotQuake(slot);
-        ensureCorrosionFilter();
-
-        const now = performance.now();
-        quakeStates.set(icon, {
-            slot,
-            startMs: now,
-            seed: Math.random() * 10000,
-            gone: false,
-            rippleTriggered: false,
-            synth: null
-        });
-
-        icon.classList.add('bm-quake-active');
-        ensureQuakeLoop();
+        if (hoverAnimation && typeof hoverAnimation.startSlotQuake === 'function') {
+            hoverAnimation.startSlotQuake(slot);
+        }
     }
 
     function stopSlotQuake(slot) {
-        const icon = slot.querySelector('.bm-slot-icon');
-        if (!icon) return;
-        const state = quakeStates.get(icon);
-        if (!state) return;
-
-        if (state.synth) {
-            releaseQuakeSynth(state.synth);
-            state.synth = null;
-        }
-
-        quakeStates.delete(icon);
-        resetIconQuakeStyle(icon);
-
-        if (!quakeStates.size && quakeRafId) {
-            cancelAnimationFrame(quakeRafId);
-            quakeRafId = 0;
+        if (hoverAnimation && typeof hoverAnimation.stopSlotQuake === 'function') {
+            hoverAnimation.stopSlotQuake(slot);
         }
     }
 
     function clearAllSlotQuakes() {
-        quakeStates.forEach((state, icon) => {
-            if (state && state.synth) {
-                releaseQuakeSynth(state.synth);
-                state.synth = null;
-            }
-            resetIconQuakeStyle(icon);
-        });
-        quakeStates.clear();
-        if (quakeRafId) {
-            cancelAnimationFrame(quakeRafId);
-            quakeRafId = 0;
+        if (hoverAnimation && typeof hoverAnimation.clearAllSlotQuakes === 'function') {
+            hoverAnimation.clearAllSlotQuakes();
         }
     }
 
     function resetIconQuakeStyle(icon) {
-        icon.classList.remove('bm-quake-active', 'bm-quake-gone');
-        icon.style.transform = '';
-        icon.style.filter = '';
-        icon.style.opacity = '';
-        icon.style.boxShadow = '';
-        icon.style.clipPath = '';
-        icon.style.removeProperty('--bm-corrosion-opacity');
-        icon.style.removeProperty('--bm-corrosion-shift-x');
-        icon.style.removeProperty('--bm-corrosion-shift-y');
-        icon.style.removeProperty('--bm-corrosion-rot');
-        icon.style.removeProperty('--bm-corrosion-scale');
-        icon.style.removeProperty('--bm-corrosion-bite-a');
-        icon.style.removeProperty('--bm-corrosion-bite-b');
-        icon.style.removeProperty('--bm-corrosion-bite-c');
-        icon.style.removeProperty('--bm-corrosion-bite-d');
-        icon.style.removeProperty('--bm-corrosion-bite-e');
-        icon.style.removeProperty('--bm-corrosion-bite-f');
+        if (hoverAnimation && typeof hoverAnimation.resetIconQuakeStyle === 'function') {
+            hoverAnimation.resetIconQuakeStyle(icon);
+        }
     }
 
     function ensureCorrosionFilter() {
-        if (corrosionFilterReady) return;
-        if (document.getElementById('bmQuakeFxDefs')) {
-            corrosionFilterReady = true;
-            return;
+        if (hoverAnimation && typeof hoverAnimation.ensureCorrosionFilter === 'function') {
+            hoverAnimation.ensureCorrosionFilter();
         }
-
-        const svgNs = 'http://www.w3.org/2000/svg';
-        const svg = document.createElementNS(svgNs, 'svg');
-        svg.setAttribute('id', 'bmQuakeFxDefs');
-        svg.setAttribute('aria-hidden', 'true');
-        svg.style.position = 'absolute';
-        svg.style.width = '0';
-        svg.style.height = '0';
-        svg.style.overflow = 'hidden';
-
-        const filter = document.createElementNS(svgNs, 'filter');
-        filter.setAttribute('id', 'bmQuakeCorrosion');
-        filter.setAttribute('x', '-30%');
-        filter.setAttribute('y', '-30%');
-        filter.setAttribute('width', '160%');
-        filter.setAttribute('height', '160%');
-
-        const noise = document.createElementNS(svgNs, 'feTurbulence');
-        noise.setAttribute('type', 'fractalNoise');
-        noise.setAttribute('baseFrequency', '0.95');
-        noise.setAttribute('numOctaves', '2');
-        noise.setAttribute('seed', '17');
-        noise.setAttribute('result', 'noise');
-
-        const warp = document.createElementNS(svgNs, 'feDisplacementMap');
-        warp.setAttribute('in', 'SourceGraphic');
-        warp.setAttribute('in2', 'noise');
-        warp.setAttribute('scale', '8');
-        warp.setAttribute('xChannelSelector', 'R');
-        warp.setAttribute('yChannelSelector', 'G');
-
-        filter.appendChild(noise);
-        filter.appendChild(warp);
-        svg.appendChild(filter);
-        document.body.appendChild(svg);
-
-        corrosionFilterReady = true;
     }
 
     function initAudioUnlockHooks() {
-        if (quakeAudioUnlockHooked || !QUAKE_SYNTH_ENABLED) return;
-        quakeAudioUnlockHooked = true;
-
-        const unlock = () => {
-            const ctx = ensureQuakeAudioContext();
-            if (!ctx) return;
-            if (ctx.state !== 'running') {
-                ctx.resume().catch(() => {});
-            }
-        };
-
-        document.addEventListener('pointerdown', unlock, { passive: true });
-        document.addEventListener('keydown', unlock, { passive: true });
-        document.addEventListener('touchstart', unlock, { passive: true });
+        if (quakeSound && typeof quakeSound.initAudioUnlockHooks === 'function') {
+            quakeSound.initAudioUnlockHooks();
+        }
     }
 
     function ensureQuakeAudioContext() {
-        if (!QUAKE_SYNTH_ENABLED) return null;
-        const Ctx = window.AudioContext || window.webkitAudioContext;
-        if (!Ctx) return null;
-
-        if (!quakeAudioCtx) {
-            quakeAudioCtx = new Ctx();
-
-            quakeMasterGainNode = quakeAudioCtx.createGain();
-            quakeMasterGainNode.gain.value = clamp01(Math.max(0, QUAKE_SYNTH_MASTER_GAIN));
-
-            quakeDryGainNode = quakeAudioCtx.createGain();
-            quakeWetGainNode = quakeAudioCtx.createGain();
-
-            const wetMix = clampRange(QUAKE_SYNTH_REVERB_MIX, 0, 1);
-            const dryMix = 1 - wetMix;
-
-            quakeDryGainNode.gain.value = dryMix;
-            quakeWetGainNode.gain.value = wetMix;
-
-            if (QUAKE_SYNTH_REVERB_ENABLED) {
-                quakeReverbPreDelayNode = quakeAudioCtx.createDelay(2.5);
-                quakeReverbConvolverNode = quakeAudioCtx.createConvolver();
-                quakeReverbToneNode = quakeAudioCtx.createBiquadFilter();
-
-                quakeReverbPreDelayNode.delayTime.value = clampRange(QUAKE_SYNTH_REVERB_PREDELAY_MS, 0, 2000) / 1000;
-                quakeReverbConvolverNode.normalize = true;
-                quakeReverbConvolverNode.buffer = createReverbImpulseBuffer(quakeAudioCtx);
-                quakeReverbToneNode.type = 'lowpass';
-                quakeReverbToneNode.frequency.value = clampRange(QUAKE_SYNTH_REVERB_TONE_HZ, 120, 20000);
-                quakeReverbToneNode.Q.value = 0.0001;
-
-                quakeMasterGainNode.connect(quakeDryGainNode);
-                quakeMasterGainNode.connect(quakeReverbPreDelayNode);
-                quakeReverbPreDelayNode.connect(quakeReverbConvolverNode);
-                quakeReverbConvolverNode.connect(quakeReverbToneNode);
-                quakeReverbToneNode.connect(quakeWetGainNode);
-            } else {
-                quakeMasterGainNode.connect(quakeDryGainNode);
-            }
-
-            quakeDryGainNode.connect(quakeAudioCtx.destination);
-            quakeWetGainNode.connect(quakeAudioCtx.destination);
+        if (quakeSound && typeof quakeSound.ensureQuakeAudioContext === 'function') {
+            return quakeSound.ensureQuakeAudioContext();
         }
-        return quakeAudioCtx;
-    }
-
-    function createReverbImpulseBuffer(ctx) {
-        const duration = clampRange(QUAKE_SYNTH_REVERB_IR_SECONDS, 0.08, 6);
-        const decay = clampRange(QUAKE_SYNTH_REVERB_DECAY_SECONDS, 0.05, 8);
-        const sampleRate = ctx.sampleRate;
-        const length = Math.max(1, Math.floor(sampleRate * duration));
-        const channels = 2;
-        const impulse = ctx.createBuffer(channels, length, sampleRate);
-
-        for (let channel = 0; channel < channels; channel++) {
-            const data = impulse.getChannelData(channel);
-            for (let i = 0; i < length; i++) {
-                const t = i / length;
-                const env = Math.pow(1 - t, decay);
-                const polarity = (channel === 0) ? 1 : -1;
-                const noise = (Math.random() * 2 - 1) * env;
-                const shimmer = Math.sin((i / sampleRate) * (220 + channel * 15) * Math.PI * 2) * 0.045 * env;
-                data[i] = (noise * 0.95 + shimmer) * polarity;
-            }
-        }
-
-        return impulse;
-    }
-
-    function clampRange(value, min, max) {
-        const n = Number(value);
-        if (!Number.isFinite(n)) return min;
-        return Math.min(max, Math.max(min, n));
-    }
-
-    function semitoneToCents(semi) {
-        return semi * 100;
+        return null;
     }
 
     function createQuakeSynth(seed) {
-        const ctx = ensureQuakeAudioContext();
-        if (!ctx || !quakeMasterGainNode) return null;
-        if (ctx.state !== 'running') {
-            ctx.resume().catch(() => {});
+        if (quakeSound && typeof quakeSound.createQuakeSynth === 'function') {
+            return quakeSound.createQuakeSynth(seed);
         }
-
-        const synthGain = ctx.createGain();
-        synthGain.gain.value = QUAKE_SYNTH_GAIN_FLOOR;
-        synthGain.connect(quakeMasterGainNode);
-
-        const waves = [];
-        const waveTypes = Array.isArray(QUAKE_SYNTH_WAVEFORMS) && QUAKE_SYNTH_WAVEFORMS.length
-            ? QUAKE_SYNTH_WAVEFORMS
-            : ['sine', 'sawtooth', 'triangle', 'square'];
-
-        const totalLevel = Math.max(0.0001, QUAKE_SYNTH_WAVE_LEVELS.reduce((sum, v) => sum + Math.max(0, Number(v) || 0), 0));
-        const randomSemiSpan = clampRange(QUAKE_SYNTH_DETUNE_RANDOM_SEMITONES, 0, 12);
-        const startHz = clampRange(QUAKE_SYNTH_BUILD_START_HZ, 0.1, 22000);
-
-        waveTypes.forEach((type, idx) => {
-            const osc = ctx.createOscillator();
-            const waveGain = ctx.createGain();
-
-            osc.type = (type === 'sine' || type === 'square' || type === 'sawtooth' || type === 'triangle')
-                ? type
-                : 'sine';
-
-            const baseLevel = Math.max(0, Number(QUAKE_SYNTH_WAVE_LEVELS[idx]) || 0);
-            waveGain.gain.value = baseLevel / totalLevel;
-
-            const baseSemi = Number(QUAKE_SYNTH_DETUNE_SEMITONES[idx]) || 0;
-            const randSemi = ((Math.sin(seed * (idx + 1) * 0.017) + Math.cos(seed * (idx + 3) * 0.011)) * 0.5) * randomSemiSpan;
-            const cents = clampRange(semitoneToCents(baseSemi + randSemi), -2400, 2400);
-
-            osc.detune.value = cents;
-            osc.frequency.value = startHz;
-
-            osc.connect(waveGain);
-            waveGain.connect(synthGain);
-
-            try {
-                osc.start();
-            } catch {
-                // Ignore duplicate-start issues; synth will still cleanup safely.
-            }
-
-            waves.push({ osc, waveGain });
-        });
-
-        return {
-            ctx,
-            synthGain,
-            waves,
-            currentFreq: startHz,
-            currentGain: QUAKE_SYNTH_GAIN_FLOOR,
-            released: false,
-            stopTimer: null
-        };
+        return null;
     }
 
     function setSynthBuildFrame(synth, buildProgress) {
-        if (!synth || synth.released) return;
-
-        const p = clamp01(buildProgress);
-        const freqStart = clampRange(QUAKE_SYNTH_BUILD_START_HZ, 0.1, 22000);
-        const freqTarget = clampRange(QUAKE_SYNTH_BUILD_TARGET_HZ, freqStart + 0.001, 24000);
-        const freqShape = clampRange(QUAKE_SYNTH_BUILD_FREQ_PROGRESS_EXP, 0.05, 12);
-        const ampShape = clampRange(QUAKE_SYNTH_BUILD_AMP_PROGRESS_EXP, 0.05, 12);
-
-        const progFreq = Math.pow(p, freqShape);
-        const progGain = Math.pow(p, ampShape);
-
-        const targetFreq = freqStart * Math.pow(freqTarget / freqStart, progFreq);
-        const maxGain = clampRange(QUAKE_SYNTH_BUILD_MAX_GAIN, QUAKE_SYNTH_GAIN_FLOOR, 3);
-        const targetGain = QUAKE_SYNTH_GAIN_FLOOR + (maxGain - QUAKE_SYNTH_GAIN_FLOOR) * progGain;
-
-        const now = synth.ctx.currentTime;
-        const nyquistSafe = Math.max(30, (synth.ctx.sampleRate * 0.5) - 250);
-        const safeFreq = clampRange(targetFreq, 0.1, nyquistSafe);
-        const safeGain = clampRange(targetGain, QUAKE_SYNTH_GAIN_FLOOR, 3);
-
-        synth.currentFreq = safeFreq;
-        synth.currentGain = safeGain;
-
-        synth.synthGain.gain.setValueAtTime(safeGain, now);
-        synth.waves.forEach(w => {
-            w.osc.frequency.setValueAtTime(safeFreq, now);
-        });
+        if (quakeSound && typeof quakeSound.setSynthBuildFrame === 'function') {
+            quakeSound.setSynthBuildFrame(synth, buildProgress);
+        }
     }
 
     function releaseQuakeSynth(synth) {
-        if (!synth || synth.released) return;
-        synth.released = true;
-
-        const now = synth.ctx.currentTime;
-        const decayMs = clampRange(QUAKE_SYNTH_DECAY_MS, 30, 8000);
-        const decaySec = decayMs / 1000;
-        const expFactor = clampRange(QUAKE_SYNTH_DECAY_EXP_FACTOR, 0.1, 100);
-        const timeConst = Math.max(0.0008, decaySec / expFactor);
-
-        const floorFreq = clampRange(QUAKE_SYNTH_DECAY_FREQ_FLOOR_HZ, 0.1, 4000);
-        const currentFreq = clampRange(synth.currentFreq, floorFreq, 30000);
-        const currentGain = clampRange(synth.currentGain, QUAKE_SYNTH_GAIN_FLOOR, 10);
-
-        synth.synthGain.gain.cancelScheduledValues(now);
-        synth.synthGain.gain.setValueAtTime(currentGain, now);
-        synth.synthGain.gain.setTargetAtTime(QUAKE_SYNTH_GAIN_FLOOR, now, timeConst);
-
-        synth.waves.forEach(w => {
-            w.osc.frequency.cancelScheduledValues(now);
-            w.osc.frequency.setValueAtTime(currentFreq, now);
-            w.osc.frequency.setTargetAtTime(floorFreq, now, timeConst);
-        });
-
-        const stopDelay = decayMs + clampRange(QUAKE_SYNTH_STOP_PADDING_MS, 20, 3000);
-        synth.stopTimer = setTimeout(() => {
-            synth.waves.forEach(w => {
-                try { w.osc.stop(); } catch {}
-                try { w.osc.disconnect(); } catch {}
-                try { w.waveGain.disconnect(); } catch {}
-            });
-            try { synth.synthGain.disconnect(); } catch {}
-        }, stopDelay);
+        if (quakeSound && typeof quakeSound.releaseQuakeSynth === 'function') {
+            quakeSound.releaseQuakeSynth(synth);
+        }
     }
 
     function ensureQuakeLoop() {
@@ -1568,13 +714,11 @@
         quakeRafId = requestAnimationFrame(runQuakeFrame);
     }
 
-    function clamp01(value) {
-        return Math.max(0, Math.min(1, value));
-    }
-
     function smoothStep(value) {
-        const t = clamp01(value);
-        return t * t * (3 - 2 * t);
+        const clampValue = (quakeSound && typeof quakeSound.clamp01 === 'function')
+            ? quakeSound.clamp01(value)
+            : Math.max(0, Math.min(1, value));
+        return clampValue * clampValue * (3 - 2 * clampValue);
     }
 
     function lerp(from, to, amount) {
@@ -1600,8 +744,7 @@
 
             const elapsed = now - state.startMs;
 
-            // First 5s keep existing CSS subtle hover look.
-            if (elapsed < QUAKE_HOLD_MS) {
+            if (elapsed < (quakeConfig.holdMs || 5000)) {
                 icon.style.transform = '';
                 icon.style.filter = '';
                 icon.style.opacity = '';
@@ -1609,20 +752,20 @@
                 return;
             }
 
-            const tremorElapsed = elapsed - QUAKE_HOLD_MS;
-            if (tremorElapsed < QUAKE_BUILD_MS) {
+            const tremorElapsed = elapsed - (quakeConfig.holdMs || 5000);
+            if (tremorElapsed < (quakeConfig.buildMs || 40000)) {
                 if (!state.synth) {
                     state.synth = createQuakeSynth(state.seed);
                 }
                 if (state.synth) {
-                    setSynthBuildFrame(state.synth, tremorElapsed / QUAKE_BUILD_MS);
+                    setSynthBuildFrame(state.synth, tremorElapsed / (quakeConfig.buildMs || 40000));
                 }
                 applyQuakeBuild(icon, tremorElapsed, state.seed);
                 return;
             }
 
-            const explodeElapsed = tremorElapsed - QUAKE_BUILD_MS;
-            if (explodeElapsed < QUAKE_EXPLODE_MS) {
+            const explodeElapsed = tremorElapsed - (quakeConfig.buildMs || 40000);
+            if (explodeElapsed < (quakeConfig.explodeMs || 400)) {
                 if (!state.rippleTriggered) {
                     state.rippleTriggered = true;
                     spawnExplosionRipple(icon, state.seed);
@@ -1654,6 +797,11 @@
     }
 
     function spawnExplosionRipple(icon, seed) {
+        if (hoverAnimation && typeof hoverAnimation.spawnExplosionRipple === 'function') {
+            hoverAnimation.spawnExplosionRipple(icon, seed);
+            return;
+        }
+
         const rect = icon.getBoundingClientRect();
         const cx = rect.left + (rect.width / 2);
         const cy = rect.top + (rect.height / 2);
@@ -1676,6 +824,11 @@
     }
 
     function spawnBookmarksSectionGlitch(sectionEl, seed) {
+        if (hoverAnimation && typeof hoverAnimation.spawnBookmarksSectionGlitch === 'function') {
+            hoverAnimation.spawnBookmarksSectionGlitch(sectionEl, seed);
+            return;
+        }
+
         if (!sectionEl || !sectionEl.isConnected) return;
         const sectionRect = sectionEl.getBoundingClientRect();
         if (sectionRect.width < 2 || sectionRect.height < 2) return;
@@ -1732,19 +885,23 @@
             if (layer.parentNode) layer.parentNode.removeChild(layer);
         };
 
-        setTimeout(cleanup, QUAKE_SECTION_GLITCH_DURATION_MS);
+        setTimeout(cleanup, quakeConfig.sectionGlitchDurationMs || 360);
     }
 
     function applyQuakeBuild(icon, tremorElapsed, seed) {
-        const t = Math.min(1, tremorElapsed / QUAKE_BUILD_MS);
+        if (hoverAnimation && typeof hoverAnimation.applyQuakeBuild === 'function') {
+            hoverAnimation.applyQuakeBuild(icon, tremorElapsed, seed);
+            return;
+        }
+
+        const t = Math.min(1, tremorElapsed / (quakeConfig.buildMs || 40000));
         const ts = tremorElapsed / 1000;
-        const entry = smoothStep(tremorElapsed / QUAKE_ENTRY_RAMP_MS);
+        const entry = smoothStep(tremorElapsed / (quakeConfig.entryRampMs || 1600));
         const ramp = Math.pow(t, 2.2);
         const ampPx = 0.08 + (0.45 * t) + (10.5 * ramp);
         const rotAmp = 0.03 + (0.2 * t) + (6.4 * ramp);
         const scale = 1.06 + (0.03 * t) + (0.2 * Math.pow(t, 2.7));
 
-        // Fast, irregular oscillation with layered frequencies and phase drift.
         const f1 = 17 + 48 * t;
         const f2 = 29 + 56 * t;
         const f3 = 43 + 70 * t;
@@ -1770,14 +927,12 @@
         const pulse = Math.pow(Math.max(0, Math.sin((ts * (2.1 + t * 4.6)) + seed * 0.013)), 6);
         const pulseBoost = 1 + pulse * (0.15 + t * 0.55);
 
-        // Corrosion cue: split-second glitch hint at build second 20.
-        const hintDist = Math.abs(tremorElapsed - QUAKE_CORROSION_HINT_AT_MS);
-        const hintRaw = Math.max(0, 1 - (hintDist / QUAKE_CORROSION_HINT_SPAN_MS));
+        const hintDist = Math.abs(tremorElapsed - (quakeConfig.corrosionHintAtMs || 20000));
+        const hintRaw = Math.max(0, 1 - (hintDist / (quakeConfig.corrosionHintSpanMs || 140)));
         const corrosionHint = Math.pow(hintRaw, 2.4);
 
-        // Final 10s of build progressively corrode the icon.
-        const corrosionStart = QUAKE_BUILD_MS - QUAKE_CORROSION_RAMP_MS;
-        const corrosionRamp = Math.max(0, Math.min(1, (tremorElapsed - corrosionStart) / QUAKE_CORROSION_RAMP_MS));
+        const corrosionStart = (quakeConfig.buildMs || 40000) - (quakeConfig.corrosionRampMs || 10000);
+        const corrosionRamp = Math.max(0, Math.min(1, (tremorElapsed - corrosionStart) / (quakeConfig.corrosionRampMs || 10000)));
         const corrosionLevel = Math.max(corrosionHint, corrosionRamp);
 
         const buildX = x * pulseBoost;
@@ -1826,7 +981,6 @@
             '0 0 1px ' + spread + 'px rgba(255,255,255,' + glowA + '), ' +
             '0 0 ' + blur + 'px ' + lerp(2, 2 + 5.5 * t, entry).toFixed(2) + 'px rgba(0,0,0,' + glowB + ')';
 
-        // Keep 5s handoff visually seamless: extra decay shadows fade in only with corrosion progress.
         const extraBlend = smoothStep(entry * corrosionLevel);
         if (extraBlend > 0.001) {
             const rustBlur = lerp(0, 12 + corrosionLevel * 28, extraBlend).toFixed(2);
@@ -1847,7 +1001,12 @@
     }
 
     function applyQuakeExplosion(icon, explodeElapsed, seed) {
-        const t = Math.min(1, explodeElapsed / QUAKE_EXPLODE_MS);
+        if (hoverAnimation && typeof hoverAnimation.applyQuakeExplosion === 'function') {
+            hoverAnimation.applyQuakeExplosion(icon, explodeElapsed, seed);
+            return;
+        }
+
+        const t = Math.min(1, explodeElapsed / (quakeConfig.explodeMs || 400));
         const ts = explodeElapsed / 1000;
         const inv = 1 - t;
 
