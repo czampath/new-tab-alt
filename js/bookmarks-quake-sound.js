@@ -30,6 +30,7 @@
     const QUAKE_SYNTH_COLOR_POST_GAIN = 0.67;
 
     const QUAKE_SYNTH_DECAY_MS = 1300;
+    const QUAKE_SYNTH_CHARGE_DOWN_MS = 2000;
     const QUAKE_SYNTH_DECAY_FREQ_FLOOR_HZ = 26;
     const QUAKE_SYNTH_DECAY_EXP_FACTOR = 10;
     const QUAKE_SYNTH_STOP_PADDING_MS = 200;
@@ -642,7 +643,8 @@
                 colorPhase: (seed * (idx + 5) * 0.00023) % (Math.PI * 2),
                 freqRatio: clampRange(Number(QUAKE_SYNTH_WAVE_FREQ_MULTIPLIERS[idx]) || 1, 0.12, 6),
                 motionRate: clampRange(Number(QUAKE_SYNTH_WAVE_MOTION_RATES[idx]) || 1, 0.2, 9),
-                motionDepth: clampRange(Number(QUAKE_SYNTH_WAVE_MOTION_DEPTHS[idx]) || 0, 0, 0.2)
+                motionDepth: clampRange(Number(QUAKE_SYNTH_WAVE_MOTION_DEPTHS[idx]) || 0, 0, 0.2),
+                currentFreq: startHz
             });
         });
 
@@ -732,6 +734,7 @@
             const waveLevel = clampRange(w.baseGain * emphasis, 0.02, 1.1);
             const freqMotion = Math.sin((p * Math.PI * 2 * w.motionRate) + w.colorPhase * 1.7) * w.motionDepth;
             const waveFreq = clampRange(safeFreq * w.freqRatio * (1 + freqMotion), 0.1, nyquistSafe);
+            w.currentFreq = waveFreq;
             w.waveGain.gain.setTargetAtTime(waveLevel, now, smooth);
             w.osc.frequency.setTargetAtTime(waveFreq, now, smooth);
         });
@@ -757,12 +760,17 @@
         }
     }
 
-    function releaseQuakeSynth(synth) {
+    function releaseQuakeSynth(synth, options) {
         if (!synth || synth.released) return;
         synth.released = true;
 
+        const opts = options || {};
+        const shouldExplode = opts.explode !== false;
+
         const now = synth.ctx.currentTime;
-        const decayMs = clampRange(QUAKE_SYNTH_DECAY_MS, 30, 8000);
+        const decayMs = shouldExplode
+            ? clampRange(QUAKE_SYNTH_DECAY_MS, 30, 8000)
+            : clampRange(QUAKE_SYNTH_CHARGE_DOWN_MS, 40, 8000);
         const decaySec = decayMs / 1000;
         const expFactor = clampRange(QUAKE_SYNTH_DECAY_EXP_FACTOR, 0.1, 100);
         const timeConst = Math.max(0.0008, decaySec / expFactor);
@@ -770,8 +778,13 @@
         const floorFreq = clampRange(QUAKE_SYNTH_DECAY_FREQ_FLOOR_HZ, 0.1, 4000);
         const currentFreq = clampRange(synth.currentFreq, floorFreq, 30000);
         const currentGain = clampRange(synth.currentGain, QUAKE_SYNTH_GAIN_FLOOR, 10);
+        const targetReleaseFloor = shouldExplode
+            ? floorFreq
+            : clampRange(Math.max(floorFreq, currentFreq * 0.11), floorFreq, 4200);
 
-        triggerImpactBoom(synth);
+        if (shouldExplode) {
+            triggerImpactBoom(synth);
+        }
 
         synth.synthGain.gain.cancelScheduledValues(now);
         synth.synthGain.gain.setValueAtTime(currentGain, now);
@@ -779,28 +792,39 @@
 
         if (synth.tensionPulseGain) {
             synth.tensionPulseGain.gain.cancelScheduledValues(now);
-            synth.tensionPulseGain.gain.setTargetAtTime(1, now, 0.08);
+            synth.tensionPulseGain.gain.setTargetAtTime(1, now, timeConst);
         }
 
         if (synth.riserGain && synth.riserFilter) {
             synth.riserGain.gain.cancelScheduledValues(now);
             synth.riserGain.gain.setValueAtTime(synth.riserGain.gain.value, now);
-            synth.riserGain.gain.setTargetAtTime(QUAKE_SYNTH_GAIN_FLOOR, now, 0.05);
+            synth.riserGain.gain.setTargetAtTime(QUAKE_SYNTH_GAIN_FLOOR, now, timeConst);
+            synth.riserFilter.frequency.cancelScheduledValues(now);
+            synth.riserFilter.frequency.setValueAtTime(clampRange(synth.riserFilter.frequency.value, 40, 20000), now);
+            synth.riserFilter.frequency.setTargetAtTime(clampRange(targetReleaseFloor * 7.5, 80, 18000), now, timeConst);
+            synth.riserFilter.Q.cancelScheduledValues(now);
+            synth.riserFilter.Q.setValueAtTime(clampRange(synth.riserFilter.Q.value, 0.2, 20), now);
+            synth.riserFilter.Q.setTargetAtTime(0.25, now, timeConst);
         }
 
         if (synth.colorFilter) {
             synth.colorFilter.frequency.cancelScheduledValues(now);
             synth.colorFilter.frequency.setValueAtTime(clampRange(synth.colorFilter.frequency.value, 60, 20000), now);
-            synth.colorFilter.frequency.exponentialRampToValueAtTime(110, now + 0.42);
+            synth.colorFilter.frequency.setTargetAtTime(110, now, timeConst);
             synth.colorFilter.Q.cancelScheduledValues(now);
             synth.colorFilter.Q.setValueAtTime(clampRange(synth.colorFilter.Q.value, 0.0001, 18), now);
-            synth.colorFilter.Q.linearRampToValueAtTime(0.0001, now + 0.42);
+            synth.colorFilter.Q.setTargetAtTime(0.0001, now, timeConst);
         }
 
         synth.waves.forEach(w => {
+            const waveStartFreq = clampRange(
+                Number(w.currentFreq) || (currentFreq * (Number(w.freqRatio) || 1)),
+                floorFreq,
+                30000
+            );
             w.osc.frequency.cancelScheduledValues(now);
-            w.osc.frequency.setValueAtTime(currentFreq, now);
-            w.osc.frequency.setTargetAtTime(Math.max(18, floorFreq * w.freqRatio), now, timeConst);
+            w.osc.frequency.setValueAtTime(waveStartFreq, now);
+            w.osc.frequency.setTargetAtTime(Math.max(18, targetReleaseFloor * w.freqRatio), now, timeConst);
         });
 
         const stopDelay = decayMs + clampRange(QUAKE_SYNTH_STOP_PADDING_MS, 20, 3000);
@@ -861,6 +885,7 @@
             synthColorDrive: QUAKE_SYNTH_COLOR_DRIVE,
             synthColorPostGain: QUAKE_SYNTH_COLOR_POST_GAIN,
             synthDecayMs: QUAKE_SYNTH_DECAY_MS,
+            synthChargeDownMs: QUAKE_SYNTH_CHARGE_DOWN_MS,
             synthDecayFreqFloorHz: QUAKE_SYNTH_DECAY_FREQ_FLOOR_HZ,
             synthDecayExpFactor: QUAKE_SYNTH_DECAY_EXP_FACTOR,
             synthStopPaddingMs: QUAKE_SYNTH_STOP_PADDING_MS,

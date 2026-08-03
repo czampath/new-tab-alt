@@ -113,9 +113,9 @@
         }
     }
 
-    function releaseQuakeSynth(synth) {
+    function releaseQuakeSynth(synth, explode) {
         if (quakeSound && typeof quakeSound.releaseQuakeSynth === 'function') {
-            quakeSound.releaseQuakeSynth(synth);
+            quakeSound.releaseQuakeSynth(synth, { explode: explode !== false });
         }
     }
 
@@ -147,7 +147,7 @@
         if (!state) return;
 
         if (state.synth) {
-            releaseQuakeSynth(state.synth);
+            releaseQuakeSynth(state.synth, false);
             state.synth = null;
         }
 
@@ -163,7 +163,7 @@
     function clearAllSlotQuakes() {
         quakeStates.forEach((state, icon) => {
             if (state && state.synth) {
-                releaseQuakeSynth(state.synth);
+                releaseQuakeSynth(state.synth, false);
                 state.synth = null;
             }
             resetIconQuakeStyle(icon);
@@ -188,7 +188,7 @@
         quakeStates.forEach((state, icon) => {
             if (!icon.isConnected || !state.slot.matches(':hover')) {
                 if (state.synth) {
-                    releaseQuakeSynth(state.synth);
+                    releaseQuakeSynth(state.synth, false);
                     state.synth = null;
                 }
                 quakeStates.delete(icon);
@@ -224,7 +224,7 @@
                     state.rippleTriggered = true;
                     spawnExplosionRipple(icon, state.seed);
                     if (state.synth) {
-                        releaseQuakeSynth(state.synth);
+                        releaseQuakeSynth(state.synth, true);
                         state.synth = null;
                     }
                 }
