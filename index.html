@@ -119,6 +119,14 @@
                 <button id="saveWeatherLocation" style="margin-top: 8px; padding: 8px 16px; background: #667eea; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; width: 100%;">Save Location</button>
             </div>
         </div>
+        <div class="setting-item">
+            <label>Data</label>
+            <div style="display:flex;gap:8px;">
+                <button id="exportDataBtn" style="flex:1;padding:8px;background:#667eea;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;">Export</button>
+                <button id="importDataBtn" style="flex:1;padding:8px;background:#fff;color:#667eea;border:2px solid #667eea;border-radius:8px;cursor:pointer;font-size:13px;">Import</button>
+            </div>
+            <input type="file" id="importDataFile" accept=".json" style="display:none;">
+        </div>
         <button class="guide-btn" id="guideBtn">📖 How to Use</button>
     </div>
 

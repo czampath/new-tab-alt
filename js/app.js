@@ -722,6 +722,66 @@ document.getElementById('saveWeatherLocation').addEventListener('click', () => {
     }
 });
 
+// Export / Import
+const EXPORT_SKIP_KEYS = new Set(['weatherCache']);
+
+function exportData() {
+    const data = {};
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!EXPORT_SKIP_KEYS.has(key)) data[key] = localStorage.getItem(key);
+    }
+    const payload = { version: 2, exportedAt: new Date().toISOString(), data };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'new-tab-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+function importData(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const payload = JSON.parse(e.target.result);
+            if (typeof payload !== 'object' || payload === null) {
+                showToast('Invalid backup file.');
+                return;
+            }
+            // Support both v1 (named keys) and v2 (raw data map)
+            if (payload.version === 2 && payload.data && typeof payload.data === 'object') {
+                Object.entries(payload.data).forEach(([k, v]) => localStorage.setItem(k, v));
+            } else if (payload.version === 1) {
+                if (payload.settings) localStorage.setItem('settings', JSON.stringify(payload.settings));
+                if (payload.bookmarks) localStorage.setItem('bookmarks', JSON.stringify(payload.bookmarks));
+                if (payload.advancedBookmarksConfig) localStorage.setItem('advancedBookmarksConfig', JSON.stringify(payload.advancedBookmarksConfig));
+            } else {
+                showToast('Invalid backup file.');
+                return;
+            }
+            showToast('Imported! Reloading\u2026', 2000);
+            setTimeout(() => location.reload(), 2000);
+        } catch {
+            showToast('Failed to read backup file.');
+        }
+    };
+    reader.readAsText(file);
+}
+
+document.getElementById('exportDataBtn').addEventListener('click', exportData);
+document.getElementById('importDataBtn').addEventListener('click', () => {
+    document.getElementById('importDataFile').value = '';
+    document.getElementById('importDataFile').click();
+});
+document.getElementById('importDataFile').addEventListener('change', (e) => {
+    importData(e.target.files[0]);
+});
+
 // Initial render
 renderBookmarks();
 
