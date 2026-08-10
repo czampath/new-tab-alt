@@ -214,6 +214,7 @@ function updateWeatherDisplay(weatherData) {
         <span class="weather-temp">${weatherData.temp}°C</span>
         <span>${weatherData.description}${locationText}</span>
     `;
+    window.WeatherRain?.notify(weatherData);
 }
 
 async function loadWeather() {
@@ -680,6 +681,8 @@ toggleWeather.addEventListener('change', () => {
     document.getElementById('weatherConfig').style.display = settings.showWeather ? 'block' : 'none';
     if (settings.showWeather) {
         loadWeather();
+    } else {
+        window.WeatherRain?.notify(null);
     }
 });
 
