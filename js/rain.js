@@ -17,10 +17,10 @@
     const DB = 224;
 
     const LIGHT_RAIN_PRESET = {
-        intensity: 70,
-        speed: 400,
-        density: 360,
-        length: 50,
+        intensity: 60,
+        speed: 350,
+        density: 200,
+        length: 30,
         sway: 250,
         wobble: 250,
         micro: 100,
@@ -54,19 +54,20 @@
 
     let active = false;
     let weatherRainy = false;
+    let lastWeatherData = null;
     let testOn = false;
 
     let startTs = null;
     let activatedAt = 0;
     let masterAlpha = 0;
 
-    let targetLevel = 0.55;
-    let speedMult = 1.0;
-    let densityMult = 1.0;
-    let lengthMult = 1.0;
-    let swayMult = 1.0;
-    let wobbleMult = 1.0;
-    let microMult = 1.0;
+    let targetLevel = NON_LIGHT_RAIN_PRESET.intensity / 100;
+    let speedMult = NON_LIGHT_RAIN_PRESET.speed / 100;
+    let densityMult = NON_LIGHT_RAIN_PRESET.density / 100;
+    let lengthMult = NON_LIGHT_RAIN_PRESET.length / 100;
+    let swayMult = NON_LIGHT_RAIN_PRESET.sway / 100;
+    let wobbleMult = NON_LIGHT_RAIN_PRESET.wobble / 100;
+    let microMult = NON_LIGHT_RAIN_PRESET.micro / 100;
     let bypassDelayArmed = false;
 
     let devPanelEl = null;
@@ -261,6 +262,7 @@
     }
 
     function notify(weatherData) {
+        lastWeatherData = weatherData;
         weatherRainy = isRainy(weatherData);
         applyWeatherIntensity(weatherData);
         syncRunState();
@@ -354,15 +356,10 @@
     }
 
     function applyControllerPreset(panel) {
-        applyPreset(panel, {
-            intensity: 55,
-            speed: 100,
-            density: 100,
-            length: 100,
-            sway: 100,
-            wobble: 100,
-            micro: 100,
-        });
+        const preset = weatherRainy
+            ? (isLightRain(lastWeatherData) ? LIGHT_RAIN_PRESET : NON_LIGHT_RAIN_PRESET)
+            : NON_LIGHT_RAIN_PRESET;
+        applyPreset(panel, preset);
     }
 
     function bindSlider(panel, inputId, textId, onUpdate) {
