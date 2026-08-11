@@ -89,7 +89,10 @@
         window.addEventListener('resize', doResize);
         document.addEventListener('visibilitychange', () => {
             tabVisible = !document.hidden;
-            if (tabVisible && active && rafId === null) startLoop();
+            if (!tabVisible || !active) return;
+            randomizeDropPlacement();
+            lastFrameTs = performance.now();
+            if (rafId === null) startLoop();
         });
 
         document.addEventListener('keydown', (e) => {
@@ -151,6 +154,15 @@
     function reapplyAllWobbles() {
         layerDrops.forEach((drops) => {
             for (let i = 0; i < drops.length; i++) applyWobble(drops[i]);
+        });
+    }
+
+    function randomizeDropPlacement() {
+        layerDrops.forEach((drops) => {
+            for (let i = 0; i < drops.length; i++) {
+                drops[i].x = Math.random() * W;
+                drops[i].y = Math.random() * H;
+            }
         });
     }
 
