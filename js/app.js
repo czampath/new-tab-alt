@@ -500,7 +500,8 @@ const settingsPanel = document.getElementById('settingsPanel');
 const toggleTime = document.getElementById('toggleTime');
 const toggleBookmarks = document.getElementById('toggleBookmarks');
 const toggleSearch = document.getElementById('toggleSearch');
-const timeDisplay = document.querySelector('.time-display');
+const timeEl = document.getElementById('time');
+const dateEl = document.getElementById('date');
 const bookmarksSection = document.querySelector('.bookmarks-section');
 const searchBox = document.querySelector('.search-box');
 
@@ -525,7 +526,9 @@ function applySettings() {
         document.body.style.color = '#fff';
     }
     
-    timeDisplay.style.display = settings.showTime ? 'block' : 'none';
+    const timeVisibility = settings.showTime ? '' : 'none';
+    timeEl.style.display = timeVisibility;
+    dateEl.style.display = timeVisibility;
     bookmarksSection.style.display = settings.showBookmarks ? 'block' : 'none';
     searchBox.style.display = settings.showSearch ? 'flex' : 'none';
     const weatherEl = document.getElementById('weather');
@@ -630,7 +633,9 @@ document.querySelectorAll('.color-preset').forEach(preset => {
 toggleTime.addEventListener('change', () => {
     settings.showTime = toggleTime.checked;
     localStorage.setItem('settings', JSON.stringify(settings));
-    timeDisplay.style.display = settings.showTime ? 'block' : 'none';
+    const timeVisibility = settings.showTime ? '' : 'none';
+    timeEl.style.display = timeVisibility;
+    dateEl.style.display = timeVisibility;
 });
 
 toggleBookmarks.addEventListener('change', () => {
