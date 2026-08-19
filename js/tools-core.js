@@ -369,6 +369,18 @@ const ToolManager = {
         if (backdrop) backdrop.classList.remove('active');
     },
 
+    // Persists the active tool's state without closing it (blur/timeout/unload safety net)
+    autoSave() {
+        if (!this.activeToolId) return;
+        const handler = this.registry[this.activeToolId];
+        if (!handler) return;
+        if (TabManager.isTabbed(this.activeToolId)) {
+            TabManager.saveActiveTab(this.activeToolId);
+        } else if (handler.saveState) {
+            handler.saveState();
+        }
+    },
+
     renderStrip() {
         const strip = document.getElementById('toolStrip');
         if (!strip) return;
@@ -412,6 +424,12 @@ document.addEventListener('DOMContentLoaded', () => {
         vp.classList.toggle('fullwidth');
         expandBtn.textContent = vp.classList.contains('fullwidth') ? '⊟' : '⛶';
     });
+
+    // Auto-save active tool state so nothing is lost if the tab/window closes unexpectedly
+    setInterval(() => ToolManager.autoSave(), 10000);
+    window.addEventListener('blur', () => ToolManager.autoSave());
+    document.addEventListener('visibilitychange', () => { if (document.hidden) ToolManager.autoSave(); });
+    window.addEventListener('beforeunload', () => ToolManager.autoSave());
 
     // ===== File drag-and-drop into tool viewport =====
     const viewport = document.getElementById('toolViewport');
