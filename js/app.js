@@ -34,7 +34,7 @@ let bookmarks = JSON.parse(localStorage.getItem('bookmarks')) || defaultBookmark
 
 // Load settings from localStorage
 let settings = JSON.parse(localStorage.getItem('settings')) || {
-    background: 'linear-gradient(135deg, #30cfd0 0%, #330867 100%)',
+    background: 'linear-gradient(135deg, #2c3e50 0%, #34495e 100%)',
     showTime: true,
     showBookmarks: true,
     showSearch: true,
