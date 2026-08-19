@@ -76,7 +76,7 @@ ToolManager.register('markdown-viewer', {
                 <button class="tool-btn" id="tmCopyHtml">Copy HTML</button>
             </div>
             <div class="tool-split" id="tmSplit">
-                <textarea class="tool-textarea" id="tmInput" placeholder="Type or paste Markdown...">${this._state || '# Hello\n\nStart typing **Markdown** here...'}</textarea>
+                <textarea class="tool-textarea" id="tmInput" placeholder="Type or paste Markdown...">${this._state || ''}</textarea>
                 <div class="md-preview" id="tmOutput"></div>
             </div>
         </div>`;
