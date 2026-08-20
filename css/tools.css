@@ -749,8 +749,13 @@ body.light-theme .tool-tab-add:hover { color: rgba(0,0,0,0.6); background: rgba(
     font-size: 14px;
     overflow-y: auto;
     flex: 1;
+}
+.md-preview,
+.md-preview * {
     user-select: text;
     -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
 }
 .md-preview h1 { font-size: 28px; font-weight: 600; margin: 20px 0 12px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; }
 .md-preview h2 { font-size: 22px; font-weight: 600; margin: 18px 0 10px; border-bottom: 1px solid rgba(255,255,255,0.10); padding-bottom: 6px; }
@@ -833,6 +838,34 @@ body.light-theme .tool-tab-add:hover { color: rgba(0,0,0,0.6); background: rgba(
 }
 .tool-resize-handle:hover::after,
 .tool-resize-handle.active::after {
+    background: rgba(102,126,234,0.5);
+}
+
+/* Vertical resizable handle between horizontally split panes */
+.tool-resize-handle-v {
+    width: 7px;
+    cursor: col-resize;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    border-radius: 4px;
+    transition: background 0.15s;
+}
+.tool-resize-handle-v:hover,
+.tool-resize-handle-v.active {
+    background: rgba(102,126,234,0.25);
+}
+.tool-resize-handle-v::after {
+    content: '';
+    width: 3px;
+    height: 40px;
+    border-radius: 2px;
+    background: rgba(255,255,255,0.15);
+    transition: background 0.15s;
+}
+.tool-resize-handle-v:hover::after,
+.tool-resize-handle-v.active::after {
     background: rgba(102,126,234,0.5);
 }
 
@@ -1061,6 +1094,7 @@ body.light-theme .dil-line .diff-char-add { background: rgba( 22,163,  74, 0.35)
     .tool-strip { gap: 4px; }
     .tool-strip-item { padding: 6px 10px; font-size: 11.5px; }
     .tool-split { flex-direction: column; }
+    .tool-resize-handle-v { display: none; }
     .tool-content { padding: 14px; gap: 10px; }
     .notes-sidebar { width: 100%; border-right: none; border-bottom: 1px solid rgba(255,255,255,0.14); padding-right: 0; padding-bottom: 8px; flex-direction: row; overflow-x: auto; }
     .tool-viewport-header { padding: 10px 14px; }

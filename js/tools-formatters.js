@@ -67,7 +67,7 @@ ToolManager.register('json-formatter', {
 
 // ===== 2. Markdown Viewer =====
 ToolManager.register('markdown-viewer', {
-    _state: null, _markedLoaded: false, _presentation: false,
+    _state: null, _markedLoaded: false, _presentation: false, _splitPct: 50,
     init(container) {
         container.innerHTML = `<div class="tool-content">
             <div class="tool-actions" id="tmActions">
@@ -77,11 +77,41 @@ ToolManager.register('markdown-viewer', {
             </div>
             <div class="tool-split" id="tmSplit">
                 <textarea class="tool-textarea" id="tmInput" placeholder="Type or paste Markdown...">${this._state || ''}</textarea>
+                <div class="tool-resize-handle-v" id="tmResizeHandle" title="Drag to resize"></div>
                 <div class="md-preview" id="tmOutput"></div>
             </div>
         </div>`;
         const input = document.getElementById('tmInput');
         const output = document.getElementById('tmOutput');
+        const handle = document.getElementById('tmResizeHandle');
+        const split = document.getElementById('tmSplit');
+        input.style.flex = `1 1 ${this._splitPct}%`;
+        output.style.flex = `1 1 ${100 - this._splitPct}%`;
+        let dragging = false, startX = 0, startPct = this._splitPct;
+        const onMove = (e) => {
+            if (!dragging) return;
+            const rect = split.getBoundingClientRect();
+            const deltaPct = ((e.clientX - startX) / rect.width) * 100;
+            let pct = Math.min(85, Math.max(15, startPct + deltaPct));
+            this._splitPct = pct;
+            input.style.flex = `1 1 ${pct}%`;
+            output.style.flex = `1 1 ${100 - pct}%`;
+        };
+        const onUp = () => {
+            dragging = false;
+            handle.classList.remove('active');
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+        };
+        handle.addEventListener('mousedown', (e) => {
+            dragging = true;
+            startX = e.clientX;
+            startPct = this._splitPct;
+            handle.classList.add('active');
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+            e.preventDefault();
+        });
         const render = () => {
             if (window.marked) {
                 output.innerHTML = window.marked.parse(input.value);
@@ -100,9 +130,11 @@ ToolManager.register('markdown-viewer', {
             const editorArea = input.parentElement.querySelector('.tool-textarea');
             if (editorArea.style.display === 'none') {
                 editorArea.style.display = '';
+                handle.style.display = '';
                 document.getElementById('tmPreview').textContent = 'Preview';
             } else {
                 editorArea.style.display = 'none';
+                handle.style.display = 'none';
                 document.getElementById('tmPreview').textContent = 'Show Editor';
             }
         };
@@ -112,11 +144,13 @@ ToolManager.register('markdown-viewer', {
                 viewport.classList.remove('presentation');
                 document.getElementById('tmActions').style.display = '';
                 input.style.display = '';
+                handle.style.display = '';
                 this._presentation = false;
             } else {
                 viewport.classList.add('presentation');
                 document.getElementById('tmActions').style.display = 'none';
                 input.style.display = 'none';
+                handle.style.display = 'none';
                 this._presentation = true;
                 showToast('Press ESC to exit presentation');
             }
