@@ -1,6 +1,6 @@
 ﻿// ===== 12. Notes =====
 ToolManager.register('notes', {
-    _notes: null, _activeId: null, _saveTimer: null,
+    _notes: null, _activeId: null, _saveTimer: null, _dropStatusTimer: null,
     init(container) {
         this._notes = JSON.parse(localStorage.getItem('tool-state-notes') || '[]');
         if (!this._notes.length) this._notes.push({ id: Date.now(), title: 'Untitled', content: '', updated: Date.now() });
@@ -13,6 +13,7 @@ ToolManager.register('notes', {
                     <button class="tool-btn" id="tnNew">+ New</button>
                     <button class="tool-btn danger" id="tnDel">Delete</button>
                 </div>
+                <div id="tnDropStatus" style="min-height:18px;font-size:12px;color:rgba(255,255,255,0.65);"></div>
                 <textarea class="tool-textarea" id="tnContent" placeholder="Start typing..." style="flex:1;"></textarea>
             </div>
         </div>`;
@@ -45,8 +46,12 @@ ToolManager.register('notes', {
         this._saveCurrentNote = () => {
             const note = this._notes.find(n => n.id === this._activeId);
             if (note) {
-                note.title = titleEl.value;
-                note.content = contentEl.value;
+                const nextTitle = titleEl.value;
+                const nextContent = contentEl.value;
+                const changed = note.title !== nextTitle || note.content !== nextContent;
+                if (!changed) return;
+                note.title = nextTitle;
+                note.content = nextContent;
                 note.updated = Date.now();
             }
             localStorage.setItem('tool-state-notes', JSON.stringify(this._notes));
@@ -84,10 +89,15 @@ ToolManager.register('notes', {
         loadNote();
         renderSidebar();
     },
-    destroy() { clearTimeout(this._saveTimer); },
+    destroy() {
+        clearTimeout(this._saveTimer);
+        clearTimeout(this._dropStatusTimer);
+    },
     saveState() { if (this._saveCurrentNote) this._saveCurrentNote(); },
     loadState() {},
     handleFileDrop(content, filename) {
+        const newBtn = document.getElementById('tnNew');
+        if (newBtn) newBtn.click();
         const titleEl = document.getElementById('tnTitle');
         const contentEl = document.getElementById('tnContent');
         if (!titleEl || !contentEl) return;
@@ -95,6 +105,31 @@ ToolManager.register('notes', {
         contentEl.value = content;
         titleEl.dispatchEvent(new Event('input'));
         contentEl.dispatchEvent(new Event('input'));
+    },
+    onFileDropStatus(info) {
+        const statusEl = document.getElementById('tnDropStatus');
+        if (!statusEl) return;
+        clearTimeout(this._dropStatusTimer);
+        if (!info || !info.state) {
+            statusEl.textContent = '';
+            return;
+        }
+        if (info.state === 'loading') {
+            statusEl.style.color = 'rgba(255,255,255,0.75)';
+            statusEl.textContent = info.message || 'Loading dropped file...';
+            return;
+        }
+        if (info.state === 'success') {
+            statusEl.style.color = '#73d89a';
+            statusEl.textContent = info.message || 'File loaded';
+            this._dropStatusTimer = setTimeout(() => { statusEl.textContent = ''; }, 2000);
+            return;
+        }
+        if (info.state === 'error') {
+            statusEl.style.color = '#ff8f8f';
+            statusEl.textContent = info.message || 'Failed to load file';
+            this._dropStatusTimer = setTimeout(() => { statusEl.textContent = ''; }, 4000);
+        }
     },
     _esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 });

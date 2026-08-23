@@ -434,6 +434,64 @@ document.addEventListener('DOMContentLoaded', () => {
     // ===== File drag-and-drop into tool viewport =====
     const viewport = document.getElementById('toolViewport');
     let _dropDragCounter = 0;
+    let _dropInProgress = false;
+    const TEXT_EXTENSIONS = new Set([
+        'txt', 'md', 'markdown', 'xml', 'json', 'sql', 'csv', 'tsv', 'log',
+        'yaml', 'yml', 'ini', 'cfg', 'conf', 'toml', 'properties',
+        'html', 'htm', 'css', 'js', 'mjs', 'cjs', 'ts', 'jsx', 'tsx',
+        'py', 'java', 'c', 'cpp', 'h', 'hpp', 'cs', 'go', 'rs', 'php', 'rb',
+        'sh', 'bat', 'ps1', 'kt', 'swift', 'lua'
+    ]);
+    const TEXT_MIME_TYPES = new Set([
+        'application/json',
+        'application/ld+json',
+        'application/xml',
+        'application/sql',
+        'application/x-sql',
+        'application/javascript',
+        'application/x-javascript',
+        'application/x-yaml',
+        'application/yaml',
+        'application/toml'
+    ]);
+    const isTextLikeDropFile = (file) => {
+        const mime = (file.type || '').toLowerCase();
+        if (mime.startsWith('text/')) return true;
+        if (TEXT_MIME_TYPES.has(mime)) return true;
+        const name = file.name || '';
+        const dot = name.lastIndexOf('.');
+        const ext = dot >= 0 ? name.slice(dot + 1).toLowerCase() : '';
+        return !!ext && TEXT_EXTENSIONS.has(ext);
+    };
+    const readBlobAsArrayBuffer = (blob) => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => resolve(ev.target.result);
+        reader.onerror = () => reject(new Error('Failed to read file chunk'));
+        reader.onabort = () => reject(new Error('Read cancelled'));
+        reader.readAsArrayBuffer(blob);
+    });
+    const readFileAsTextWithTimeout = async (file, timeoutMs = 15000, onProgress) => {
+        const chunkSize = 1024 * 1024; // 1 MiB chunks keep the UI responsive on large files.
+        const decoder = new TextDecoder();
+        const parts = [];
+        let offset = 0;
+        const startedAt = Date.now();
+        while (offset < file.size) {
+            if (Date.now() - startedAt > timeoutMs) {
+                throw new Error(`Timed out reading ${file.name}`);
+            }
+            const next = Math.min(offset + chunkSize, file.size);
+            const chunkBlob = file.slice(offset, next);
+            const chunkBuffer = await readBlobAsArrayBuffer(chunkBlob);
+            parts.push(decoder.decode(chunkBuffer, { stream: next < file.size }));
+            offset = next;
+            if (onProgress) onProgress(offset, file.size);
+            // Yield so actions like back/new note remain clickable while loading.
+            await new Promise(resolve => setTimeout(resolve, 0));
+        }
+        parts.push(decoder.decode());
+        return parts.join('');
+    };
     viewport.addEventListener('dragenter', (e) => {
         if (!e.dataTransfer.types.includes('Files')) return;
         e.preventDefault();
@@ -458,18 +516,50 @@ document.addEventListener('DOMContentLoaded', () => {
             viewport.classList.remove('drop-over');
         }
     });
-    viewport.addEventListener('drop', (e) => {
+    viewport.addEventListener('drop', async (e) => {
         e.preventDefault();
         _dropDragCounter = 0;
         viewport.classList.remove('drop-over');
+        if (_dropInProgress) {
+            showToast('Wait for current file drop to finish');
+            return;
+        }
         const handler = ToolManager.activeToolId && ToolManager.registry[ToolManager.activeToolId];
         if (!handler || typeof handler.handleFileDrop !== 'function') return;
-        Array.from(e.dataTransfer.files).forEach(file => {
-            const reader = new FileReader();
-            reader.onload = (ev) => {
+        const files = Array.from(e.dataTransfer.files || []);
+        if (!files.length) return;
+        const invalidFile = files.find(file => !isTextLikeDropFile(file));
+        if (invalidFile) {
+            const msg = `Only text files are allowed (${invalidFile.name})`;
+            if (handler.onFileDropStatus) {
+                handler.onFileDropStatus({ state: 'error', message: msg });
+            }
+            showToast(msg);
+            return;
+        }
+        if (ToolManager.activeToolId === 'notes' && files.length !== 1) {
+            showToast('Drop one file at a time');
+            return;
+        }
+        _dropInProgress = true;
+        if (handler.onFileDropStatus) {
+            handler.onFileDropStatus({ state: 'loading', message: `Loading ${files.length} file${files.length > 1 ? 's' : ''}...` });
+        }
+        try {
+            for (const file of files) {
+                const content = await readFileAsTextWithTimeout(file, 30000, (loaded, total) => {
+                    const activeHandler = ToolManager.registry[ToolManager.activeToolId];
+                    if (activeHandler && activeHandler.onFileDropStatus) {
+                        const pct = total > 0 ? Math.min(100, Math.round((loaded / total) * 100)) : 0;
+                        activeHandler.onFileDropStatus({
+                            state: 'loading',
+                            message: `Loading ${file.name} (${pct}%)...`
+                        });
+                    }
+                });
                 const id = ToolManager.activeToolId;
                 const h = id && ToolManager.registry[id];
-                if (!h || typeof h.handleFileDrop !== 'function') return;
+                if (!h || typeof h.handleFileDrop !== 'function') continue;
                 // For tabbed tools: open in a new tab if current tab already has content
                 if (TabManager.isTabbed(id)) {
                     const currentState = TabManager.captureState(id);
@@ -480,11 +570,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Re-resolve handler after possible tab switch
                 const activeHandler = ToolManager.registry[ToolManager.activeToolId];
                 if (activeHandler && typeof activeHandler.handleFileDrop === 'function') {
-                    activeHandler.handleFileDrop(ev.target.result, file.name);
+                    activeHandler.handleFileDrop(content, file.name, file.type);
+                    if (activeHandler.onFileDropStatus) {
+                        activeHandler.onFileDropStatus({ state: 'success', message: `Loaded ${file.name}` });
+                    }
                 }
-            };
-            reader.readAsText(file);
-        });
+            }
+        } catch (err) {
+            const msg = err && err.message ? err.message : 'Failed to load dropped file';
+            const activeHandler = ToolManager.registry[ToolManager.activeToolId];
+            if (activeHandler && activeHandler.onFileDropStatus) {
+                activeHandler.onFileDropStatus({ state: 'error', message: msg });
+            }
+            showToast(msg);
+        } finally {
+            _dropInProgress = false;
+        }
     });
 
     // ESC to close tool viewport
