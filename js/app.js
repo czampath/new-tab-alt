@@ -346,6 +346,8 @@ function renderBookmarks() {
         const bookmarkEl = document.createElement('a');
         bookmarkEl.className = 'bookmark';
         bookmarkEl.href = sanitizeUrl(bookmark.url);
+        bookmarkEl.target = '_blank';
+        bookmarkEl.rel = 'noopener noreferrer';
         
         // Create icon with image
         const iconSpan = document.createElement('span');

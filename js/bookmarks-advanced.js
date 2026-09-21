@@ -484,6 +484,8 @@
         const slot = document.createElement('a');
         slot.className = 'bm-slot';
         slot.href = safeUrl(bm.url);
+        slot.target = '_blank';
+        slot.rel = 'noopener noreferrer';
         slot.style.animationDelay = (0.05 + 0.03 * bmIdx) + 's';
         slot.title = bm.title;
 
