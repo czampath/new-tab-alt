@@ -127,30 +127,72 @@ function getFaviconUrl(url) {
 }
 
 // Weather functionality
-const WEATHER_CACHE_DURATION = 60 * 60 * 1000; // 1 hour in milliseconds
+const WEATHER_CACHE_DURATION = 30 * 60 * 1000;
+const WEATHER_REFRESH_INTERVAL = 60 * 1000;
+const WEATHER_LOCK_DURATION = 2 * 60 * 1000;
+const weatherChannel = 'BroadcastChannel' in window ? new BroadcastChannel('new-tab-weather') : null;
+let weatherRefreshPromise = null;
 
-function getWeatherFromCache() {
+function getWeatherCache(lat, lon, allowExpired = false) {
     const cached = localStorage.getItem('weatherCache');
     if (!cached) return null;
-    
+
     try {
         const data = JSON.parse(cached);
-        const now = Date.now();
-        if (now - data.timestamp < WEATHER_CACHE_DURATION) {
-            return data.weather;
-        }
+        const isSameLocation = String(data.lat) === String(lat) && String(data.lon) === String(lon);
+        const isFresh = Date.now() - data.timestamp < WEATHER_CACHE_DURATION;
+        return isSameLocation && (allowExpired || isFresh) ? data : null;
     } catch {
         return null;
     }
-    return null;
 }
 
-function cacheWeather(weatherData) {
+function cacheWeather(weatherData, lat, lon) {
     const cache = {
         weather: weatherData,
+        lat,
+        lon,
         timestamp: Date.now()
     };
     localStorage.setItem('weatherCache', JSON.stringify(cache));
+    weatherChannel?.postMessage({ type: 'weather-updated', cache });
+    return cache;
+}
+
+function getWeatherFromCache(lat, lon) {
+    return getWeatherCache(lat, lon)?.weather || null;
+}
+
+function tryAcquireWeatherLease() {
+    const now = Date.now();
+    const current = JSON.parse(localStorage.getItem('weatherRefreshLock') || 'null');
+    if (current && current.expiresAt > now) return null;
+
+    const lease = { id: `${now}-${Math.random()}`, expiresAt: now + WEATHER_LOCK_DURATION };
+    localStorage.setItem('weatherRefreshLock', JSON.stringify(lease));
+    const acquired = JSON.parse(localStorage.getItem('weatherRefreshLock') || 'null');
+    return acquired?.id === lease.id ? lease : null;
+}
+
+function releaseWeatherLease(lease) {
+    const current = JSON.parse(localStorage.getItem('weatherRefreshLock') || 'null');
+    if (current?.id === lease.id) localStorage.removeItem('weatherRefreshLock');
+}
+
+async function withWeatherRefreshLock(callback) {
+    if (navigator.locks) {
+        return navigator.locks.request('new-tab-weather-refresh', { ifAvailable: true }, lock => {
+            return lock ? callback() : null;
+        });
+    }
+
+    const lease = tryAcquireWeatherLease();
+    if (!lease) return null;
+    try {
+        return await callback();
+    } finally {
+        releaseWeatherLease(lease);
+    }
 }
 
 async function fetchWeather(lat, lon) {
@@ -161,7 +203,7 @@ async function fetchWeather(lat, lon) {
     }
     
     try {
-        const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${settings.weatherApiKey}&units=metric`;
+        const url = `https://api.openweathermap.org/data/2.5/weather?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&appid=${encodeURIComponent(settings.weatherApiKey)}&units=metric`;
         const response = await fetch(url);
         if (!response.ok) throw new Error('Weather fetch failed');
         const data = await response.json();
@@ -173,7 +215,7 @@ async function fetchWeather(lat, lon) {
             location: data.name
         };
         
-        cacheWeather(weatherData);
+        cacheWeather(weatherData, lat, lon);
         return weatherData;
     } catch (error) {
         console.error('Weather error:', error);
@@ -217,22 +259,66 @@ function updateWeatherDisplay(weatherData) {
     window.WeatherRain?.notify(weatherData);
 }
 
+document.addEventListener('weather-rain-visibility', event => {
+    document.getElementById('weather').classList.toggle('weather-rainy', event.detail.visible);
+});
+
 async function loadWeather() {
     if (!settings.showWeather) return;
-    
-    const cached = getWeatherFromCache();
-    if (cached) {
-        updateWeatherDisplay(cached);
+
+    const { weatherLat: lat, weatherLon: lon } = settings;
+    if (!lat || !lon) {
+        updateWeatherDisplay(null);
         return;
     }
-    
-    if (settings.weatherLat && settings.weatherLon) {
-        const weatherData = await fetchWeather(settings.weatherLat, settings.weatherLon);
-        updateWeatherDisplay(weatherData);
-    } else {
-        updateWeatherDisplay(null);
-    }
+
+    const cached = getWeatherCache(lat, lon, true);
+    if (cached) updateWeatherDisplay(cached.weather);
+
+    if (getWeatherFromCache(lat, lon)) return;
+    if (weatherRefreshPromise) return weatherRefreshPromise;
+
+    weatherRefreshPromise = withWeatherRefreshLock(async () => {
+        const sharedCache = getWeatherCache(lat, lon);
+        if (sharedCache) {
+            updateWeatherDisplay(sharedCache.weather);
+            return sharedCache.weather;
+        }
+
+        const weatherData = await fetchWeather(lat, lon);
+        if (weatherData) updateWeatherDisplay(weatherData);
+        return weatherData;
+    }).finally(() => {
+        weatherRefreshPromise = null;
+    });
+
+    return weatherRefreshPromise;
 }
+
+function handleSharedWeatherUpdate(cache) {
+    if (!cache || !settings.showWeather) return;
+    if (String(cache.lat) !== String(settings.weatherLat) || String(cache.lon) !== String(settings.weatherLon)) return;
+    updateWeatherDisplay(cache.weather);
+}
+
+weatherChannel?.addEventListener('message', event => {
+    if (event.data?.type === 'weather-updated') handleSharedWeatherUpdate(event.data.cache);
+});
+
+window.addEventListener('storage', event => {
+    if (event.key !== 'weatherCache' && event.key !== 'settings') return;
+    if (event.key === 'weatherCache') {
+        try {
+            handleSharedWeatherUpdate(JSON.parse(event.newValue));
+        } catch {
+            // Ignore malformed shared cache data.
+        }
+    }
+});
+
+setInterval(() => {
+    loadWeather();
+}, WEATHER_REFRESH_INTERVAL);
 
 // Time and Date
 function updateTime() {

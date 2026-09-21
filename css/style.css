@@ -221,6 +221,12 @@ body {
     align-items: center;
     justify-content: center;
     gap: 8px;
+    transition: opacity 0.8s ease;
+}
+
+.weather.weather-rainy {
+    opacity: 0;
+    pointer-events: none;
 }
 
 .weather-icon {

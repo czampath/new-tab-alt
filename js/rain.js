@@ -54,6 +54,7 @@
 
     let active = false;
     let weatherRainy = false;
+    let rainVisible = false;
     let lastWeatherData = null;
     let testOn = false;
 
@@ -178,6 +179,10 @@
             rafId = null;
         }
         masterAlpha = 0;
+        if (rainVisible) {
+            rainVisible = false;
+            document.dispatchEvent(new CustomEvent('weather-rain-visibility', { detail: { visible: false } }));
+        }
         if (ctx) ctx.clearRect(0, 0, W, H);
     }
 
@@ -217,6 +222,14 @@
         } else {
             const t = Math.min((elapsed - DELAY_MS) / FADEIN_MS, 1.0);
             masterAlpha = easeInOutCubic(t);
+        }
+
+        const nextRainVisible = masterAlpha >= 0.002;
+        if (nextRainVisible !== rainVisible) {
+            rainVisible = nextRainVisible;
+            document.dispatchEvent(new CustomEvent('weather-rain-visibility', {
+                detail: { visible: rainVisible }
+            }));
         }
 
         const sway = SWAY_AMP_DEG * swayMult * Math.sin(2 * Math.PI * ts / SWAY_PERIOD);
