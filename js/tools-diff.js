@@ -11,6 +11,7 @@ ToolManager.register('diff-viewer', {
     _preferences: null,
     _editorLeft: null,
     _editorRight: null,
+    _refreshTimer: null,
 
     init(container) {
         this._container = container;
@@ -66,6 +67,8 @@ ToolManager.register('diff-viewer', {
     },
 
     destroy() {
+        clearTimeout(this._refreshTimer);
+        this._refreshTimer = null;
         this._editorLeft = null;
         this._editorRight = null;
         this._container = null;
@@ -98,7 +101,7 @@ ToolManager.register('diff-viewer', {
             showToast('Both inputs are occupied. Clear a side before dropping another file.');
             return;
         }
-        this._markResultStale();
+        this._refreshComparison();
     },
 
     _bindEvents() {
@@ -109,7 +112,7 @@ ToolManager.register('diff-viewer', {
         this._container.querySelector('#tdKeyOrder').addEventListener('change', (event) => {
             this._preferences.ignoreObjectKeyOrder = event.target.checked;
             this._writePreferences();
-            this._markResultStale();
+            this._refreshComparison();
         });
         this._container.querySelectorAll('[data-diff-mode]').forEach((button) => {
             button.addEventListener('click', () => this._changeMode(button.dataset.diffMode));
@@ -118,7 +121,7 @@ ToolManager.register('diff-viewer', {
             button.addEventListener('click', () => this._copyText(this._getValue(button.dataset.copySource)));
         });
         this._container.addEventListener('input', (event) => {
-            if (event.target.matches('.ce-ta, .diff-plain-input, .tool-label-input')) this._markResultStale();
+            if (event.target.matches('.ce-ta, .diff-plain-input, .tool-label-input')) this._scheduleRefresh();
         });
     },
 
@@ -143,7 +146,7 @@ ToolManager.register('diff-viewer', {
         const right = this._getValue('right');
         this._setupEditors(mode, left, right);
         this._updateToolbar(mode);
-        this._markResultStale();
+        this._refreshComparison();
     },
 
     _updateToolbar(mode) {
@@ -156,7 +159,7 @@ ToolManager.register('diff-viewer', {
         keyOrder.closest('.diff-toggle').hidden = mode !== 'json';
     },
 
-    _compare() {
+    _compare(showResults = true) {
         const mode = this._getMode();
         const left = this._getValue('left');
         const right = this._getValue('right');
@@ -187,7 +190,7 @@ ToolManager.register('diff-viewer', {
         };
         this._resultStale = false;
         this._currentChange = 0;
-        this._showResults();
+        if (showResults) this._showResults();
     },
 
     _parseJson(left, right) {
@@ -391,20 +394,26 @@ ToolManager.register('diff-viewer', {
         this._setValue('left', right);
         this._setValue('right', left);
         [leftLabel.value, rightLabel.value] = [rightLabel.value, leftLabel.value];
-        if (!this._container.querySelector('#tdResults').hidden) this._compare();
-        else this._markResultStale();
+        this._refreshComparison();
     },
 
     _clearSide(side) {
         this._setValue(side, '');
-        this._markResultStale();
+        this._refreshComparison();
         this._getInput(side).focus();
     },
 
-    _markResultStale() {
-        if (!this._result || this._resultStale) return;
-        this._resultStale = true;
-        if (!this._container.querySelector('#tdResults').hidden) this._showResults();
+    _refreshComparison() {
+        clearTimeout(this._refreshTimer);
+        this._refreshTimer = null;
+        if (!this._result) return;
+        const sourceVisible = !this._container.querySelector('#tdSource').hidden;
+        this._compare(!sourceVisible);
+    },
+
+    _scheduleRefresh() {
+        clearTimeout(this._refreshTimer);
+        this._refreshTimer = setTimeout(() => this._refreshComparison(), 150);
     },
 
     _getMode() {
