@@ -19,7 +19,7 @@ const TOOL_DEFS = [
 
 // ===== Tab Manager (multi-tab sessions for supported tools) =====
 const TabManager = {
-    TABBED: new Set(['json-formatter','markdown-viewer','sql-formatter','text-formatter','regex-tester','diff-viewer']),
+    TABBED: new Set(['json-formatter','markdown-viewer','sql-formatter','text-formatter','regex-tester','diff-viewer','color-picker']),
     _data: {},
 
     isTabbed(id) { return this.TABBED.has(id); },

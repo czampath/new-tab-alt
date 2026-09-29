@@ -17,7 +17,7 @@ const TOOL_DEFS = [
 ];
 
 const ToolBadges = {
-    tabbed: new Set(['json-formatter', 'markdown-viewer', 'sql-formatter', 'text-formatter', 'regex-tester', 'diff-viewer']),
+    tabbed: new Set(['json-formatter', 'markdown-viewer', 'sql-formatter', 'text-formatter', 'regex-tester', 'diff-viewer', 'color-picker']),
 
     hasContent(state) {
         if (state == null || state === '') return false;

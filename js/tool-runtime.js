@@ -18,12 +18,12 @@
         'screensaver': ['js/tools-screensaver.js']
     };
 
-    function showToast(message, duration = 3000) {
+    window.showToast = function showToast(message, duration = 3000) {
         const toast = document.getElementById('toast');
         toast.textContent = message;
         toast.classList.add('show');
         setTimeout(() => toast.classList.remove('show'), duration);
-    }
+    };
 
     function loadScript(src) {
         return new Promise((resolve, reject) => {
