@@ -25,8 +25,9 @@ ToolManager.register('diff-viewer', {
                         <div class="diff-mode-group" role="group" aria-label="Comparison mode">
                             <button class="tool-btn diff-mode-btn" data-diff-mode="text" type="button">Text</button>
                             <button class="tool-btn diff-mode-btn" data-diff-mode="json" type="button">JSON</button>
+                            <button class="tool-btn diff-mode-btn" data-diff-mode="yaml" type="button">YAML</button>
                         </div>
-                        <label class="diff-toggle"><input id="tdKeyOrder" type="checkbox"> Ignore object key order</label>
+                        <label class="diff-toggle"><input id="tdKeyOrder" type="checkbox"> Ignore key order</label>
                     </div>
                     <div class="diff-toolbar-actions">
                         <button class="tool-btn" id="tdSwap" type="button" title="Swap Original and Modified">Swap sides</button>
@@ -121,16 +122,21 @@ ToolManager.register('diff-viewer', {
             button.addEventListener('click', () => this._copyText(this._getValue(button.dataset.copySource)));
         });
         this._container.addEventListener('input', (event) => {
-            if (event.target.matches('.ce-ta, .diff-plain-input, .tool-label-input')) this._scheduleRefresh();
+            if (event.target.matches('.ce-ta, .diff-plain-input, .tool-label-input')) {
+                this._updateToolbar(this._getMode());
+                this._scheduleRefresh();
+            }
         });
     },
 
     _setupEditors(mode, left, right) {
         const leftHost = this._container.querySelector('#tdLeftHost');
         const rightHost = this._container.querySelector('#tdRightHost');
-        if (mode === 'json') {
-            this._editorLeft = createCodeEditor(leftHost, { language: 'json', taId: 'tdLeft', placeholder: 'Paste original JSON...', value: left });
-            this._editorRight = createCodeEditor(rightHost, { language: 'json', taId: 'tdRight', placeholder: 'Paste modified JSON...', value: right });
+        if (mode === 'json' || mode === 'yaml') {
+            const language = mode;
+            const format = mode.toUpperCase();
+            this._editorLeft = createCodeEditor(leftHost, { language, taId: 'tdLeft', placeholder: `Paste original ${format}...`, value: left });
+            this._editorRight = createCodeEditor(rightHost, { language, taId: 'tdRight', placeholder: `Paste modified ${format}...`, value: right });
         } else {
             this._editorLeft = null;
             this._editorRight = null;
@@ -152,11 +158,31 @@ ToolManager.register('diff-viewer', {
     _updateToolbar(mode) {
         this._container.querySelectorAll('[data-diff-mode]').forEach((button) => {
             const active = button.dataset.diffMode === mode;
+            const structured = button.dataset.diffMode;
+            const valid = structured === 'text' || this._isValidStructuredMode(structured);
             button.classList.toggle('active', active);
             button.setAttribute('aria-pressed', String(active));
+            button.disabled = !valid;
         });
         const keyOrder = this._container.querySelector('#tdKeyOrder');
-        keyOrder.closest('.diff-toggle').hidden = mode !== 'json';
+        keyOrder.closest('.diff-toggle').hidden = mode === 'text';
+    },
+
+    _isValidStructuredMode(mode) {
+        const left = this._getValue('left');
+        const right = this._getValue('right');
+        if (!left.trim() || !right.trim()) return false;
+        if (mode === 'json') return this._isJson(left) && this._isJson(right);
+        if (mode === 'yaml') return !this._isJson(left) && !this._isJson(right) && this._isYaml(left) && this._isYaml(right);
+        return false;
+    },
+
+    _isJson(value) {
+        try { JSON.parse(value); return true; } catch { return false; }
+    },
+
+    _isYaml(value) {
+        try { window.YamlParser?.loadAll(value); return true; } catch { return false; }
     },
 
     _compare(showResults = true) {
@@ -173,6 +199,12 @@ ToolManager.register('diff-viewer', {
             if (!parsed) return;
             compareLeft = JSON.stringify(this._normalizeJson(parsed.left), null, 2);
             compareRight = JSON.stringify(this._normalizeJson(parsed.right), null, 2);
+            normalized = true;
+        } else if (mode === 'yaml') {
+            const parsed = this._parseYaml(left, right);
+            if (!parsed) return;
+            compareLeft = window.YamlParser.dump(this._normalizeJson(parsed.left));
+            compareRight = window.YamlParser.dump(this._normalizeJson(parsed.right));
             normalized = true;
         }
 
@@ -200,6 +232,23 @@ ToolManager.register('diff-viewer', {
         try { parsedLeft = JSON.parse(left); } catch (error) { this._setError('left', error.message); valid = false; }
         try { parsedRight = JSON.parse(right); } catch (error) { this._setError('right', error.message); valid = false; }
         return valid ? { left: parsedLeft, right: parsedRight } : null;
+    },
+
+    _parseYaml(left, right) {
+        if (!window.YamlParser) {
+            this._setError('left', 'YAML parser failed to load.');
+            this._setError('right', 'YAML parser failed to load.');
+            return null;
+        }
+        let parsedLeft;
+        let parsedRight;
+        let valid = true;
+        try { parsedLeft = window.YamlParser.loadAll(left); } catch (error) { this._setError('left', error.message); valid = false; }
+        try { parsedRight = window.YamlParser.loadAll(right); } catch (error) { this._setError('right', error.message); valid = false; }
+        return valid ? {
+            left: parsedLeft.length === 1 ? parsedLeft[0] : parsedLeft,
+            right: parsedRight.length === 1 ? parsedRight[0] : parsedRight
+        } : null;
     },
 
     _normalizeJson(value) {
@@ -285,7 +334,7 @@ ToolManager.register('diff-viewer', {
         area.hidden = false;
         area.innerHTML = `
             <div class="diff-result-toolbar">
-                <div class="diff-result-summary" id="tdSummary">${identical ? 'No differences' : `${result.changeCount} changed row${result.changeCount === 1 ? '' : 's'}`}${result.normalized ? ' - normalized JSON' : ''}${this._resultStale ? ' - previous valid comparison' : ''}</div>
+                <div class="diff-result-summary" id="tdSummary">${identical ? 'No differences' : `${result.changeCount} changed row${result.changeCount === 1 ? '' : 's'}`}${result.normalized ? ` - normalized ${result.mode.toUpperCase()}` : ''}${this._resultStale ? ' - previous valid comparison' : ''}</div>
                 <div class="diff-result-actions">
                     <button class="tool-btn" id="tdBackToSource" type="button">Edit source</button>
                     <div class="diff-nav-group" role="group" aria-label="Change navigation">
@@ -333,14 +382,14 @@ ToolManager.register('diff-viewer', {
             render.innerHTML = this._renderCopyButton('unified') + result.rows.map((row, index) => this._renderUnifiedRow(row, index)).join('');
         } else {
             render.className = 'diff-render diff-render-split';
-            render.innerHTML = `<div class="diff-column-heading"><span>${this._escapeHtml(result.leftLabel)}</span>${this._renderCopyButton('left')}</div><div class="diff-column-heading"><span>${this._escapeHtml(result.rightLabel)}</span>${this._renderCopyButton('right')}</div>${result.rows.map((row, index) => this._renderSplitRow(row, index)).join('')}`;
+            render.innerHTML = `<div class="diff-column-heading"><span>${this._escapeHtml(result.leftLabel)}</span>${this._renderCopyButton('left', result.leftLabel)}</div><div class="diff-column-heading"><span>${this._escapeHtml(result.rightLabel)}</span>${this._renderCopyButton('right', result.rightLabel)}</div>${result.rows.map((row, index) => this._renderSplitRow(row, index)).join('')}`;
         }
         this._bindResultCopyButtons();
         this._updateChangeCounter();
     },
 
-    _renderCopyButton(target) {
-        const label = target === 'left' ? 'Copy Original' : target === 'right' ? 'Copy Modified' : 'Copy comparison';
+    _renderCopyButton(target, name) {
+        const label = name ? `Copy ${name}` : 'Copy comparison';
         const placement = target === 'unified' ? 'diff-copy-btn-render' : 'diff-copy-btn-header';
         return `<button class="diff-copy-btn ${placement}" data-copy-result="${target}" type="button" title="${label}" aria-label="${label}"><span class="diff-copy-icon" aria-hidden="true"></span></button>`;
     },
@@ -404,6 +453,7 @@ ToolManager.register('diff-viewer', {
     },
 
     _refreshComparison() {
+        this._updateToolbar(this._getMode());
         clearTimeout(this._refreshTimer);
         this._refreshTimer = null;
         if (!this._result) return;

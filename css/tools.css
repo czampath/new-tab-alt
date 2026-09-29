@@ -1368,6 +1368,8 @@ body.light-theme .dil-line .diff-char-add { background: rgba( 22,163,  74, 0.35)
 .diff-render-split {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-auto-rows: min-content;
+    align-content: start;
 }
 .diff-column-heading {
     position: sticky;
