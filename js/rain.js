@@ -79,14 +79,6 @@
     let tabVisible = !document.hidden;
 
     function init() {
-        canvas = document.createElement('canvas');
-        canvas.id = 'rainCanvas';
-        canvas.style.cssText = 'position:fixed;top:0;right:0;bottom:0;left:0;pointer-events:none;z-index:-1;';
-        document.body.insertBefore(canvas, document.body.firstChild);
-
-        ctx = canvas.getContext('2d', { alpha: true });
-
-        doResize();
         window.addEventListener('resize', doResize);
         document.addEventListener('visibilitychange', () => {
             tabVisible = !document.hidden;
@@ -106,7 +98,18 @@
         createDevPanel();
     }
 
+    function ensureCanvas() {
+        if (canvas) return;
+        canvas = document.createElement('canvas');
+        canvas.id = 'rainCanvas';
+        canvas.style.cssText = 'position:fixed;top:0;right:0;bottom:0;left:0;pointer-events:none;z-index:-1;';
+        document.body.insertBefore(canvas, document.body.firstChild);
+        ctx = canvas.getContext('2d', { alpha: true });
+        doResize();
+    }
+
     function doResize() {
+        if (!canvas) return;
         W = window.innerWidth;
         H = window.innerHeight;
         canvas.width = W;
@@ -187,6 +190,7 @@
     }
 
     function activateRain() {
+        ensureCanvas();
         makeDrops();
         const nowPerf = performance.now();
         startTs = bypassDelayArmed ? nowPerf - DELAY_MS : null;
@@ -197,6 +201,12 @@
 
     function deactivateRain() {
         stopLoop();
+        canvas?.remove();
+        canvas = null;
+        ctx = null;
+        W = 0;
+        H = 0;
+        layerDrops = BASE_LAYERS.map(() => []);
     }
 
     function syncRunState() {

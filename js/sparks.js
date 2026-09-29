@@ -4,6 +4,7 @@ const ctx = canvas.getContext('2d', { alpha: true });
 
 const haywireCanvas = document.getElementById('haywireCanvas');
 const haywireCtx = haywireCanvas.getContext('2d', { alpha: true });
+let animationFrameId = null;
 
 // Audio context for continuous spark sound
 let audioContext = null;
@@ -231,8 +232,32 @@ function resizeCanvas() {
     haywireCanvas.width = window.innerWidth;
     haywireCanvas.height = window.innerHeight;
 }
-resizeCanvas();
-window.addEventListener('resize', resizeCanvas);
+
+function releaseCanvasBuffers() {
+    canvas.width = 1;
+    canvas.height = 1;
+    haywireCanvas.width = 1;
+    haywireCanvas.height = 1;
+}
+
+function startAnimation() {
+    if (animationFrameId !== null) return;
+    resizeCanvas();
+    animationFrameId = requestAnimationFrame(animate);
+}
+
+function stopAnimation() {
+    if (animationFrameId !== null) cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
+    if (sparkGainNode) sparkGainNode.gain.value = 0;
+    if (haywireGainNode) haywireGainNode.gain.value = 0;
+    releaseCanvasBuffers();
+}
+
+releaseCanvasBuffers();
+window.addEventListener('resize', () => {
+    if (animationFrameId !== null) resizeCanvas();
+});
 
 // Handle tab visibility changes to stop audio
 document.addEventListener('visibilitychange', () => {
@@ -246,6 +271,7 @@ document.addEventListener('visibilitychange', () => {
         currentHaywireVolume = 0;
         targetVolume = 0;
         targetHaywireVolume = 0;
+        stopAnimation();
     }
 });
 
@@ -387,6 +413,7 @@ let frameCount = 0;
 window.createDangleSparks = function(x, y, intensity, mousePressed = false) {
     // Initialize audio on first interaction
     initAudioContext();
+    startAnimation();
     
     // Scale spark size based on intensity
     // For small dangle intensities (0.18-2), use larger base
@@ -476,9 +503,11 @@ function animate(currentTime) {
             particle.draw();
         }
     }
-    
-    requestAnimationFrame(animate);
-}
 
-// Start animation
-requestAnimationFrame(animate);
+    if (!particles.length) {
+        stopAnimation();
+        return;
+    }
+
+    animationFrameId = requestAnimationFrame(animate);
+}

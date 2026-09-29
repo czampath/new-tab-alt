@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="css/tools.css">
+    <style>
+        html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: transparent; }
+        .tool-viewport { position: fixed; inset: 0; max-width: none; border: 0; transform: none; }
+        .tool-viewport.active { animation: none; transform: none; }
+        .tool-viewport-header { display: none; }
+        .tool-runtime-toast { position: fixed; right: 20px; bottom: 20px; z-index: 2000; padding: 10px 14px; border-radius: 6px; background: rgba(0,0,0,0.8); color: #fff; font: 13px 'Inter', sans-serif; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+        .tool-runtime-toast.show { opacity: 1; }
+    </style>
+</head>
+<body>
+    <div class="tool-runtime-toast" id="toast"></div>
+    <div class="tool-viewport-backdrop" id="toolBackdrop"></div>
+    <div class="tool-viewport" id="toolViewport">
+        <div class="tool-viewport-header">
+            <button id="toolBack"></button><span id="toolTitle"></span><button id="toolExpand"></button><button id="toolClose"></button>
+        </div>
+        <div class="tool-tab-bar" id="toolTabBar"></div>
+        <div class="tool-viewport-body" id="toolBody"></div>
+    </div>
+    <script src="js/tool-runtime.js"></script>
+</body>
+</html>
